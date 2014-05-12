@@ -466,6 +466,9 @@ public:
                                std::map<const std::string*, std::set<unsigned> > &res);
 
   Expr::Width getWidthForLLVMType(LLVM_TYPE_Q llvm::Type *type) const;
+  // fwl added
+
+  TimingSolver *getSolver() { return solver; }
 };
   
 } // End klee namespace

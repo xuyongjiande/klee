@@ -14,6 +14,9 @@
 #include "klee/Expr.h"
 #include "klee/Internal/ADT/TreeStream.h"
 
+// fwl added
+#include "Executor.h"
+
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "klee/Internal/Module/KInstIterator.h"
@@ -138,6 +141,8 @@ public:
 
   bool merge(const ExecutionState &b);
   void dumpStack(std::ostream &out) const;
+  // fwl added
+  void detectInt(Executor &executor, ref<Expr> l, ref<Expr> r, int flag, int size);
 };
 
 }

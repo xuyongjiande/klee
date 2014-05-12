@@ -24,6 +24,9 @@
 #endif
 #include "llvm/Support/CommandLine.h"
 
+// fwl added
+#include "Executor.h"
+
 #include <iostream>
 #include <iomanip>
 #include <cassert>
@@ -378,4 +381,32 @@ void ExecutionState::dumpStack(std::ostream &out) const {
     out << "\n";
     target = sf.caller;
   }
+}
+
+// fwl added
+void ExecutionState::detectInt(Executor &executor, ref<Expr> l, ref<Expr> r, int flag, int size) {
+	if (isa<ConstantExpr>(l) && isa<ConstantExpr>(r))
+		return;
+	bool isTure;
+	ref<Expr> cond = UltExpr::create(AddExpr::create(l, r), l);
+	if (!executor.getSolver()->mayBeTure(this, cond, isTure)) {
+		std::cout << "Must be false!" << std::endl;
+		return;
+	}
+	if (isTure) {
+		ConstraintManager constraints_before(constraints);
+		addConstraint(cond);
+		std::vector< std::pair<std::string, std::vector<unsigned char> > > inputs;
+		std::vector< std::pair<std::string, std::vector<unsigned char> > >::iterator it;
+		executor.getSymbolicSolution(this, inputs);
+		for (it = inputs.begin(); it != inputs.end(); it++) {
+			std::pair<std::string, std::vector<unsigned char> > &vp = *it;
+			std::cout << "-----\n" < vp.first << std::endl << "-----\n";
+			for (int i = 0; i != vp.second.size(); i++) {
+				std::cout << vp.second[i] << " ";
+			}
+			std::cout << std::endl;
+		}
+		constraints = constraints_before;
+	}
 }
