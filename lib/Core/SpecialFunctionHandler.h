@@ -132,6 +132,8 @@ namespace klee {
     HANDLER(handleUnderConstrained);
     HANDLER(handleWarning);
     HANDLER(handleWarningOnce);
+	// fwl add
+	HANDLER(detectInt);
 #undef HANDLER
   };
 } // End klee namespace

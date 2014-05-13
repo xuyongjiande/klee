@@ -89,6 +89,8 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("klee_alias_function", handleAliasFunction, false),
   add("malloc", handleMalloc, true),
   add("realloc", handleRealloc, true),
+  // fwl add
+  add("klee_detect_int", detectInt, true),
 
   // operator delete[](void*)
   add("_ZdaPv", handleDeleteArray, false),
@@ -735,4 +737,34 @@ void SpecialFunctionHandler::handleMarkGlobal(ExecutionState &state,
   }
 }
 
-
+// fwl add
+void SpecialFunctionHandler::detectInt(ExecutionState &state,
+                                              KInstruction *target,
+                                              std::vector<ref<Expr> > &arguments) {
+	l = arguments[0];
+	r = arguments[1];
+	if (isa<ConstantExpr>(l) && isa<ConstantExpr>(r))
+		return;
+	bool isTure;
+	ref<Expr> cond = UltExpr::create(AddExpr::create(l, r), l);
+	if (!executor.getSolver()->mayBeTure(state, cond, isTure)) {
+		std::cout << "Must be false!" << std::endl;
+		return;
+	}
+	if (isTure) {
+		ConstraintManager constraints_before(state.constraints);
+		state.addConstraint(cond);
+		std::vector< std::pair<std::string, std::vector<unsigned char> > > inputs;
+		std::vector< std::pair<std::string, std::vector<unsigned char> > >::iterator it;
+		executor.getSymbolicSolution(state, inputs);
+		for (it = inputs.begin(); it != inputs.end(); it++) {
+			std::pair<std::string, std::vector<unsigned char> > &vp = *it;
+			std::cout << "-----\n" < vp.first << std::endl << "-----\n";
+			for (int i = 0; i != vp.second.size(); i++) {
+				std::cout << vp.second[i] << " ";
+			}
+			std::cout << std::endl;
+		}
+		state.constraints = constraints_before;
+	}
+}
