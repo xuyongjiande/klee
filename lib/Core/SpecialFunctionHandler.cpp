@@ -29,7 +29,9 @@
 #include "llvm/ADT/Twine.h"
 
 #include <errno.h>
+// fwl add
 #include <iostream>
+#include <iomanip>
 
 using namespace llvm;
 using namespace klee;
@@ -762,7 +764,7 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 			std::pair<std::string, std::vector<unsigned char> > &vp = *it;
 			std::cout << "-----\n" << vp.first << std::endl << "-----\n";
 			for (int i = 0; i != vp.second.size(); i++) {
-				std::cout << std::hex << static_cast<int>(vp.second[i]) << " ";
+				std::cout << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(vp.second[i]) << " ";
 			}
 			std::cout << std::endl;
 		}
