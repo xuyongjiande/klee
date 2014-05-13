@@ -741,8 +741,8 @@ void SpecialFunctionHandler::handleMarkGlobal(ExecutionState &state,
 void SpecialFunctionHandler::detectInt(ExecutionState &state,
                                               KInstruction *target,
                                               std::vector<ref<Expr> > &arguments) {
-	l = arguments[0];
-	r = arguments[1];
+	ref<Expr> l = arguments[0];
+	ref<Expr> r = arguments[1];
 	if (isa<ConstantExpr>(l) && isa<ConstantExpr>(r))
 		return;
 	bool isTure;
