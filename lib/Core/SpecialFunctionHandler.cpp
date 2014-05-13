@@ -29,6 +29,7 @@
 #include "llvm/ADT/Twine.h"
 
 #include <errno.h>
+#include <iostream>
 
 using namespace llvm;
 using namespace klee;
@@ -747,7 +748,7 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 		return;
 	bool isTure;
 	ref<Expr> cond = UltExpr::create(AddExpr::create(l, r), l);
-	if (!executor.getSolver()->mayBeTure(state, cond, isTure)) {
+	if (!(executor.getSolver()->mayBeTrue(state, cond, isTure))) {
 		std::cout << "Must be false!" << std::endl;
 		return;
 	}
@@ -759,9 +760,9 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 		executor.getSymbolicSolution(state, inputs);
 		for (it = inputs.begin(); it != inputs.end(); it++) {
 			std::pair<std::string, std::vector<unsigned char> > &vp = *it;
-			std::cout << "-----\n" < vp.first << std::endl << "-----\n";
+			std::cout << "-----\n" << vp.first << std::endl << "-----\n";
 			for (int i = 0; i != vp.second.size(); i++) {
-				std::cout << vp.second[i] << " ";
+				std::cout << std::hex << static_cast<int>(vp.second[i]) << " ";
 			}
 			std::cout << std::endl;
 		}
