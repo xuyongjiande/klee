@@ -744,12 +744,62 @@ void SpecialFunctionHandler::handleMarkGlobal(ExecutionState &state,
 void SpecialFunctionHandler::detectInt(ExecutionState &state,
                                               KInstruction *target,
                                               std::vector<ref<Expr> > &arguments) {
-	ref<Expr> l = arguments[0];
-	ref<Expr> r = arguments[1];
-	if (isa<ConstantExpr>(l) && isa<ConstantExpr>(r))
+	ref<Expr> op1 = arguments[0];
+	ref<Expr> op2 = arguments[1];
+	if (isa<ConstantExpr>(op1) && isa<ConstantExpr>(op2))
 		return;
 	bool isTure;
-	ref<Expr> cond = UltExpr::create(AddExpr::create(l, r), l);
+	unsigned opsize = op1->getWidth();
+	ref<Expr> cond; 
+	int flag = (static_cast<ConstantExpr *>(arguments[2].get()))->getZExtValue();
+	ref<Expr> zero = ConstantExpr::create(0, opsize);
+	const char* inttypes[] = {"UADD", "SADD", "USUB", "SSUB", "UMUL", "SMUL", "UDIV", "SDIV", "SHL", "LSHR", "ASHR", "ARRAY", "SIZE"};
+	switch(flag) {
+		case 0: //uadd
+			cond = UltExpr::create(AddExpr::create(op1, op2), op1);
+			break;
+		case 1: //sadd
+			cond = SltExpr::create(AndExpr::create(XorExpr::create(AddExpr::create(op1, op2), op1), XorExpr::create(AddExpr::create(op1, op2), op2)), zero);
+			break;
+		case 2: //usub cond = UltExpr::create(op1, op2);
+			break;
+		case 3: //ssub
+			cond = SltExpr::create(AndExpr::create(XorExpr::create(SubExpr::create(op1, op2), op1), XorExpr::create(op1, op2)), zero);
+			break;	
+		case 4: //umul
+			cond = AndExpr::create(NeExpr::create(op2, zero), UltExpr::create(UDivExpr::create(SubExpr::create(zero, ConstantExpr::create(1, opsize)), op2), op1));
+			break;
+		case 5: //smul
+			if (opsize == Expr::Int64){
+				s2e()->getMessagesStream(state) << "TODO: not supply 64 smul detect!\n";
+				return;
+			}
+			cond = NeExpr::create(ExtractExpr::create(AShrExpr::create(MulExpr::create(SExtExpr::create(op1, 2*opsize), SExtExpr::create(op2, 2*opsize)), ConstantExpr::create((int)opsize, opsize)), 0, opsize), AShrExpr::create(ExtractExpr::create(MulExpr::create(SExtExpr::create(op1, 2*opsize), SExtExpr::create(op2, 2*opsize)), 0, opsize), ConstantExpr::create((int)opsize - 1, opsize)));	
+			break;
+		case 6: //udiv s2e_kill_state?
+			cond = EqExpr::create(op2, zero);
+			break;
+		case 7: //sdiv
+			cond = OrExpr::create(EqExpr::create(op2, zero), AndExpr::create(EqExpr::create(op1, ShlExpr::create(ConstantExpr::create(1, opsize), ConstantExpr::create((int)opsize - 1, opsize))), EqExpr::create(op2, SubExpr::create(zero, ConstantExpr::create(1, opsize)))));
+			break;
+		case 8: //shl
+			cond = UleExpr::create(ConstantExpr::create((int)opsize, opsize), op2);
+			break;
+		case 9: //lshr
+			cond = UleExpr::create(ConstantExpr::create((int)opsize, opsize), op2);
+			break;
+		case 10: //ashr
+			cond = UleExpr::create(ConstantExpr::create((int)opsize, opsize), op2);
+			break;	
+		case 11: //array
+			cond = UleExpr::create(op2, op1);	
+			break;
+		case 12: //size
+			cond = SltExpr::create(op1, zero);
+			break;
+		default:
+			break;
+	}
 	if (!(executor.getSolver()->mayBeTrue(state, cond, isTure))) {
 		std::cout << "Must be false!" << std::endl;
 		return;
@@ -760,6 +810,7 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 		std::vector< std::pair<std::string, std::vector<unsigned char> > > inputs;
 		std::vector< std::pair<std::string, std::vector<unsigned char> > >::iterator it;
 		executor.getSymbolicSolution(state, inputs);
+		std::cout << "=====\nInteger overflow type: " << inttypes[flag] << "\n=====\n";
 		for (it = inputs.begin(); it != inputs.end(); it++) {
 			std::pair<std::string, std::vector<unsigned char> > &vp = *it;
 			std::cout << "-----\n" << vp.first << std::endl << "-----\n";
