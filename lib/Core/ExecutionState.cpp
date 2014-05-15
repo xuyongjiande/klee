@@ -31,6 +31,8 @@
 #include <set>
 #include <stdarg.h>
 
+#include <assert.h> //fwl added
+
 using namespace llvm;
 using namespace klee;
 
@@ -78,6 +80,10 @@ ExecutionState::ExecutionState(KFunction *kf)
     forkDisabled(false),
     ptreeNode(0) {
   pushFrame(0, kf);
+
+  //fwl added
+  memset(&m_Mmio, 0, sizeof(m_Mmio));
+  memset(&m_Dma, 0, sizeof(m_Dma));
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions) 
@@ -86,6 +92,9 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
     constraints(assumptions),
     queryCost(0.),
     ptreeNode(0) {
+  //fwl added
+  memset(&m_Mmio, 0, sizeof(m_Mmio));
+  memset(&m_Dma, 0, sizeof(m_Dma));
 }
 
 ExecutionState::~ExecutionState() {
@@ -127,6 +136,17 @@ ExecutionState::ExecutionState(const ExecutionState& state)
 {
   for (unsigned int i=0; i<symbolics.size(); i++)
     symbolics[i].first->refCount++;
+  //fwl added
+  m_Mmio.count = state.m_Mmio.count;
+  m_Dma.count = state.m_Dma.count;
+  for (int i = 0; i != m_Mmio.count; ++i) {
+	  m_Mmio.addr[i].address = state.m_Mmio.addr[i].address;
+	  m_Dma.addr[i].size = state.m_Mmio.addr[i].size;
+  }
+  for (int i = 0; i != m_Dma.count; ++i) {
+	  m_Dma.addr[i].address = state.m_Dma.addr[i].address;
+	  m_Dma.addr[i].size = state.m_Dma.addr[i].size;
+  }
 }
 
 ExecutionState *ExecutionState::branch() {
@@ -379,3 +399,51 @@ void ExecutionState::dumpStack(std::ostream &out) const {
     target = sf.caller;
   }
 }
+
+//fwl added
+void ExecutionState::addMmioDma(u64 addr, u64 size, int count, bool isMmio) {
+	if (isMmio) {
+		assert(count == m_Mmio.count && "Mmio error(fwl added)");
+		m_Mmio.addr[count].address = addr;
+		m_Mmio.addr[count].size = size;
+		m_Mmio.count++;
+	}
+	else {
+		assert(count == m_Dma.count && "Dma error(fwl added)");
+		m_Dma.addr[count].address = addr;
+		m_Dma.addr[count].size = size;
+		m_Dma.count++;
+	}
+}
+
+void ExecutionState::deleteMmioDma(int count, bool isMmio) {
+	if (isMmio) {
+		for (int i = count; i != m_Mmio.count-1 ; i++) {
+			m_Mmio.addr[i] = m_Mmio.addr[i+1];
+		}
+		m_Mmio.addr[m_Mmio.count-1].address = 0;
+		m_Mmio.addr[m_Mmio.count-1].size = 0;
+		m_Mmio.count--;
+	}
+	if (isMmio) {
+		for (int i = count; i != m_Dma.count-1 ; i++) {
+			m_Dma.addr[i] = m_Dma.addr[i+1];
+		}
+		m_Dma.addr[m_Dma.count-1].address = 0;
+		m_Dma.addr[m_Dma.count-1].size = 0;
+		m_Dma.count--;
+	}
+}
+
+bool ExecutionState::isMmioDma(u64 addr) {
+	for (int i = 0; i != m_Mmio.count; ++i) {
+		if ((addr >= m_Mmio.addr[i].address) && (addr - m_Mmio.addr[i].address <= m_Mmio.addr[i].size - 1))
+			return true;
+	}
+	for (int i = 0; i != m_Dma.count; ++i) {
+		if ((addr >= m_Dma.addr[i].address) && (addr - m_Dma.addr[i].address <= m_Dma.addr[i].size - 1))
+			return true;
+	}
+	return false;
+}
+

@@ -134,6 +134,8 @@ namespace klee {
     HANDLER(handleWarningOnce);
 	// fwl add
 	HANDLER(detectInt);
+	HANDLER(handleAddMmiodma);
+	HANDLER(handleDelMmiodma);
 #undef HANDLER
   };
 } // End klee namespace

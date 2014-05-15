@@ -761,6 +761,8 @@ static const char *modelledExternals[] = {
   "klee_stack_trace",
   // fwl add
   "klee_detect_int",
+  "klee_add_mmiodma",
+  "klee_del_mmiodma",
 #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)
   "llvm.dbg.declare",
   "llvm.dbg.value",

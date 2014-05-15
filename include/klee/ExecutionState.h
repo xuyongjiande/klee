@@ -61,11 +61,26 @@ struct StackFrame {
   ~StackFrame();
 };
 
+#define MAXSIZE 10 //fwl added
+typedef uint64_t u64;
+
 class ExecutionState {
 public:
   typedef std::vector<StackFrame> stack_ty;
 
 private:
+  //fwl added, for symbolic kernel-service
+  struct Unit {
+	  u64 address;
+	  u64 size;
+  };
+  struct MmioDma{
+	  Unit addr[MAXSIZE];
+	  int count;
+  };
+  MmioDma m_Mmio;
+  MmioDma m_Dma;
+
   // unsupported, use copy constructor
   ExecutionState &operator=(const ExecutionState&); 
   std::map< std::string, std::string > fnAliases;
@@ -138,6 +153,11 @@ public:
 
   bool merge(const ExecutionState &b);
   void dumpStack(std::ostream &out) const;
+
+  //fwl added
+  void addMmioDma(u64 addr, u64 size, int count, bool isMmio);
+  void deleteMmioDma(int count, bool isMmio);
+  bool isMmioDma(u64 addr);
 };
 
 }

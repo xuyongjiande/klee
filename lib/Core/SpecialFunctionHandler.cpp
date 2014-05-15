@@ -95,6 +95,10 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   // fwl add
   add("klee_detect_int", detectInt, true),
 
+  //fwl added
+  add("klee_add_mmiodma", handleAddMmiodma, true),
+  add("klee_del_mmiodma", handleDelMmiodma, true),
+
   // operator delete[](void*)
   add("_ZdaPv", handleDeleteArray, false),
   // operator delete(void*)
@@ -821,4 +825,24 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 		}
 		state.constraints = constraints_before;
 	}
+}
+
+//fwl added
+void SpecialFunctionHandler::handleAddMmiodma(ExecutionState &state,
+		KInstruction *target,
+		std::vector<ref<Expr> > &arguments) {
+	klee_message("klee_add_mmiodma");
+	uint64_t addr = static_cast<ConstantExpr *>(arguments[0].get())->getZExtValue();
+	uint64_t size = static_cast<ConstantExpr *>(arguments[1].get())->getZExtValue();
+	int count = static_cast<ConstantExpr *>(arguments[2].get())->getZExtValue();
+	bool isMmio = static_cast<ConstantExpr *>(arguments[3].get())->getZExtValue();
+	state.addMmioDma(addr, size, count, isMmio);
+}
+void SpecialFunctionHandler::handleDelMmiodma(ExecutionState &state,
+		KInstruction *target,
+		std::vector<ref<Expr> > &arguments) {
+	klee_message("klee_del_mmiodma\n");
+	int count = static_cast<ConstantExpr *>(arguments[0].get())->getZExtValue();
+	bool isMmio = static_cast<ConstantExpr *>(arguments[1].get())->getZExtValue();
+	state.deleteMmioDma(count, isMmio);
 }
