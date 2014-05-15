@@ -18,3 +18,4 @@ site.exp
 
 # Site file for llvm-lit
 lit.site.cfg
+docs/doxygen.cfg

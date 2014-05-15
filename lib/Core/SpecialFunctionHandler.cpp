@@ -771,7 +771,7 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 			break;
 		case 5: //smul
 			if (opsize == Expr::Int64){
-				s2e()->getMessagesStream(state) << "TODO: not supply 64 smul detect!\n";
+				klee_warning("TODO: not supply 64 smul detect!\n");
 				return;
 			}
 			cond = NeExpr::create(ExtractExpr::create(AShrExpr::create(MulExpr::create(SExtExpr::create(op1, 2*opsize), SExtExpr::create(op2, 2*opsize)), ConstantExpr::create((int)opsize, opsize)), 0, opsize), AShrExpr::create(ExtractExpr::create(MulExpr::create(SExtExpr::create(op1, 2*opsize), SExtExpr::create(op2, 2*opsize)), 0, opsize), ConstantExpr::create((int)opsize - 1, opsize)));	
