@@ -831,7 +831,7 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 void SpecialFunctionHandler::handleAddMmiodma(ExecutionState &state,
 		KInstruction *target,
 		std::vector<ref<Expr> > &arguments) {
-	klee_message("klee_add_mmiodma");
+	//klee_message("klee_add_mmiodma");
 	uint64_t addr = static_cast<ConstantExpr *>(arguments[0].get())->getZExtValue();
 	uint64_t size = static_cast<ConstantExpr *>(arguments[1].get())->getZExtValue();
 	int count = static_cast<ConstantExpr *>(arguments[2].get())->getZExtValue();
@@ -841,7 +841,7 @@ void SpecialFunctionHandler::handleAddMmiodma(ExecutionState &state,
 void SpecialFunctionHandler::handleDelMmiodma(ExecutionState &state,
 		KInstruction *target,
 		std::vector<ref<Expr> > &arguments) {
-	klee_message("klee_del_mmiodma\n");
+	//klee_message("klee_del_mmiodma\n");
 	int count = static_cast<ConstantExpr *>(arguments[0].get())->getZExtValue();
 	bool isMmio = static_cast<ConstantExpr *>(arguments[1].get())->getZExtValue();
 	state.deleteMmioDma(count, isMmio);

@@ -61,7 +61,7 @@ struct StackFrame {
   ~StackFrame();
 };
 
-#define MAXSIZE 10 //fwl added
+#define MAXSIZE 1000 //fwl added
 typedef uint64_t u64;
 
 class ExecutionState {

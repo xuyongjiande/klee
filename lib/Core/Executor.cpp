@@ -2900,6 +2900,29 @@ void Executor::callExternalFunction(ExecutionState &state,
   }
 }
 
+/* xyj
+ * make Symbolic : DMA read
+ */
+//ref<Expr> Executor::replaceReadWithSymbolic(ExecutionState &state, 
+ref<Expr> Executor::symbolicDmaRead(ExecutionState &state, 
+                                            ref<Expr> e) {
+  // right now, we don't replace symbolics (is there any reason to?)
+  if (!isa<ConstantExpr>(e))
+    return e;
+
+  // create a new fresh location, assert it is equal to concrete value in e
+  // and return it.
+ 
+  static unsigned id;
+  const Array *array = new Array("rrws_arr" + llvm::utostr(++id), 
+                                 Expr::getMinBytesForWidth(e->getWidth()));
+  ref<Expr> res = Expr::createTempRead(array, e->getWidth());
+  ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
+  std::cerr << "Making symbolic: " << eq << "\n";
+  state.addConstraint(eq);
+  return res;
+}
+
 /***/
 
 ref<Expr> Executor::replaceReadWithSymbolic(ExecutionState &state, 
@@ -3181,6 +3204,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         }          
       } else {
         ref<Expr> result = os->read(offset, type);
+
+		//xyj DMA read
+		uint64_t addr = static_cast<ConstantExpr *>(address.get())->getZExtValue();
+		if (state.isMmioDma(addr))
+			result = symbolicDmaRead(state, result);
         
         if (interpreterOpts.MakeConcreteSymbolic)
           result = replaceReadWithSymbolic(state, result);

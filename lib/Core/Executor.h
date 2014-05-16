@@ -293,6 +293,7 @@ private:
 
   // Called on [for now] concrete reads, replaces constant with a symbolic
   // Used for testing.
+  ref<Expr> symbolicDmaRead(ExecutionState &state, ref<Expr> e);//xyj
   ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
 
   const Cell& eval(KInstruction *ki, unsigned index, 
