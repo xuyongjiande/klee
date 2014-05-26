@@ -14,14 +14,19 @@
 #include <set>
 #include <map>
 #include <queue>
-
 // FIXME: Move out of header, use llvm streams.
 #include <ostream>
+#include "llvm/Constants.h"
+#include "llvm/Instructions.h"
+#include "llvm/Module.h"
+#include "../Module/Passes.h"
+
 
 namespace llvm {
   class BasicBlock;
   class Function;
   class Instruction;
+  class Pass;
 }
 
 namespace klee {
@@ -72,6 +77,7 @@ namespace klee {
       BFS,
       RandomState,
       RandomPath,
+	  GuidedPath,
       NURS_CovNew,
       NURS_MD2U,
       NURS_Depth,
@@ -180,6 +186,51 @@ namespace klee {
       os << "RandomPathSearcher\n";
     }
   };
+
+	//---xyj
+	class GuidedPathSearcher : public Searcher {
+	public:
+		typedef std::vector<llvm::BasicBlock *> pathType;
+		time_t searcher_start;
+
+		GuidedPathSearcher(Executor &_executor, std::string filename, int linenum);
+		~GuidedPathSearcher();
+
+		ExecutionState &selectState();
+		void update(ExecutionState *current,
+					const std::set<ExecutionState*> &addedStates,
+					const std::set<ExecutionState*> &removedStates);
+		bool empty();
+		void printName(std::ostream &os) {
+		  os << "HeuristicPathSearcher\n";
+		}
+	private:
+		std::vector<ExecutionState *> states;
+		Executor &executor;
+		//std::vector<std::map<llvm::Instruction*, bool> > instMaps;
+		//std::string defectFile;
+		int miss_ctr;
+		//std::vector<pathType> paths;
+		std::string filename;
+		int linenum;
+		int killNum;
+		llvm::BasicBlock *targetBb;
+		int targetBbReachedNum;
+		std::map< ExecutionState*, bool> rightStateMap;
+		std::map< Function* , std::vector< BasicBlock* > > relatedFuncAndBbs;
+		std::vector< Function* > otherCalledFuncs;
+		//std::map< pathType *, int > pathsBingoNum;
+		//std::map< llvm::BasicBlock *, int > targetBBBingoNum;
+		klee::func_bbs_type targetRelatedFuncs;
+		klee::pathsInFuncMapType targetRelatedBbs;
+		//std::map< pathType *, std::vector<int> > pathsBingoTime;
+
+		bool allDone();
+		bool done(int index);
+		int left(int index);
+		void killAllStates(void);
+	};
+	//---
 
   class MergingSearcher : public Searcher {
     Executor &executor;

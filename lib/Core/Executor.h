@@ -97,7 +97,7 @@ public:
 
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
 
-private:
+//private:
   class TimerInfo;
 
   KModule *kmodule;

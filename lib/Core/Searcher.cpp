@@ -38,6 +38,12 @@
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/CommandLine.h"
 
+#include "llvm/PassManager.h"
+#include "llvm/Pass.h"
+
+#include "../Module/Passes.h"
+#include <time.h>
+
 #include <cassert>
 #include <fstream>
 #include <climits>
@@ -280,6 +286,327 @@ void RandomPathSearcher::update(ExecutionState *current,
 }
 
 bool RandomPathSearcher::empty() { 
+  return executor.states.empty(); 
+}
+
+// xyj's searcher
+GuidedPathSearcher::GuidedPathSearcher(Executor &_executor, std::string _filename, int _linenum)
+  : executor(_executor), miss_ctr(0), filename(_filename), linenum(_linenum) {
+	killNum = 0;
+	targetBbReachedNum = 0;
+	
+	time_t llvmpass_start = time(NULL);
+	std::cerr << "========================================\n";
+	std::cerr << "=                                      =\n";
+	std::cerr << "=            BEGIN ANALYSIS...         =\n";
+	std::cerr << "=                                      =\n";
+	std::cerr << "========================================\n";
+	std::cerr << "[GuidedPath] " << "Begin static analysis: " << "now time: " << localtime(&llvmpass_start)->tm_hour << ":" \
+		<< localtime(&llvmpass_start)->tm_min << ":" << localtime(&llvmpass_start)->tm_sec << '\n';
+	Module *M = executor.kmodule->module;
+	PassManager Passes;
+	Passes.add(new PathList(filename, linenum, &targetRelatedFuncs, &targetRelatedBbs, &otherCalledFuncs, targetBb));
+	Passes.run(*M);
+	std::cerr << "[GuidedPath] " << "End static analysis: " << "used time: " << difftime(time(NULL), llvmpass_start) << '\n';
+	std::cerr << "[GuidedPath] Our Target: func(" << targetBb->getParent()->getName().str() << ")\tbb(" << targetBb->getName().str() <<")\n";
+	//to get more effective data structure.
+	for (pathsInFuncMapType::iterator it = targetRelatedBbs.begin(); it != targetRelatedBbs.end(); it++) {
+		Function *func = (it->first).first;
+		std::vector<BasicBlock*> bbVector = it->second;
+		relatedFuncAndBbs[func].insert(relatedFuncAndBbs[func].end(), bbVector.begin() + 1, bbVector.end());
+	}
+	int relatedBbNum = 0;
+	int mainPathAllBbNum = 0;
+	for (std::map< Function* , std::vector< BasicBlock* > >::iterator it = relatedFuncAndBbs.begin(); it != relatedFuncAndBbs.end(); it++) {
+		std::vector<BasicBlock*> *bbVector = &(it->second);
+		std::vector<BasicBlock*> tmpVector;
+		llvm::dbgs() << "DEBUG------------func: " << (*it).first->getName() << "\n";
+		for (std::vector< BasicBlock* >::iterator it = bbVector->begin(); it != bbVector->end(); it++) {
+			if (tmpVector.end() == find(tmpVector.begin(), tmpVector.end(), *it) ) {
+					tmpVector.push_back(*it);
+					llvm::dbgs() << "DEBUG -----bb: " << (*it)->getName() << "\n";
+			}
+		}
+		*bbVector = tmpVector;
+		relatedBbNum += tmpVector.size();
+		mainPathAllBbNum += ((*it).first->getBasicBlockList()).size();
+	}
+	dbgs() << "[GuidedPath] mainPath related with\t" << relatedFuncAndBbs.size() << "\tfunctions.\n";
+	dbgs() << "[GuidedPath] mainPath related with\t" << relatedBbNum << "\tbbs.\n";
+	dbgs() << "[GuidedPath] mainPath_related_funcs totally have\t" << mainPathAllBbNum << "\tbbs.\n";
+	dbgs() << "[GuidedPath] otherCalledFunctions\t" << otherCalledFuncs.size() << "\tfunctions.\n";
+
+	//显示初始时间
+	searcher_start = time(NULL);
+	std::cerr << "========================================\n";
+	std::cerr << "=                                      =\n";
+	std::cerr << "=            BEGIN RUN...              =\n";
+	std::cerr << "=                                      =\n";
+	std::cerr << "========================================\n";
+	std::cerr << ">>>>>GuidedPath: " << "run: " << "now time: " << localtime(&searcher_start)->tm_hour << ":" \
+		<< localtime(&searcher_start)->tm_min << ":" << localtime(&searcher_start)->tm_sec << '\n';
+}
+
+GuidedPathSearcher::~GuidedPathSearcher() {
+	time_t searcher_done = time(NULL);
+	std::cerr << "++++++staticstics++++++++++++++++++\n";
+	std::cerr << "[GuidedPath] " << "searcher done: " << "now time: " << localtime(&searcher_done)->tm_hour << ":" \
+		<< localtime(&searcher_done)->tm_min << ":" << localtime(&searcher_done)->tm_sec << '\n';
+	std::cerr << "[GuidedPath] " << "searcher done: " << "used time: " << difftime(searcher_done, searcher_start) << '\n';
+	/*
+	for (std::map<pathType*, int>::iterator it = pathsBingoNum.begin(); it != pathsBingoNum.end(); ++it, ++index)
+	{
+		std::cerr << "path " << index << "\tbeing executed for " << (*it).second << "\ttimes\n";
+//		for (std::vector<int>::iterator ittime = pathsBingoTime[(*it).first].begin(); ittime != pathsBingoTime[(*it).first].end(); ittime++)
+//			std::cerr << "\ttime passed: " << (*ittime) << "\n";
+	}
+	*/
+	/*
+	for (std::map<llvm::BasicBlock*, int>::iterator BBit= targetBBBingoNum.begin(); BBit != targetBBBingoNum.end(); BBit++)
+	{
+		llvm::BasicBlock* nowTargetBB = (*BBit).first;
+		int nowTargetBBNum = (*BBit).second;
+		std::cerr << "===>>> target: " << nowTargetBB->getParent()->getName().str() << "\t" << nowTargetBB->getName().str() <<"\thas been done " << nowTargetBBNum << "\ttimes.\n";
+	}
+	*/
+	std::cerr << "[GuidedPath] Target: " << targetBb->getParent()->getName().str() << "\t" << targetBb->getName().str() <<"\thas been done " << targetBbReachedNum << "\ttimes.\n";
+	std::cerr << "[GuidedPath] Totally killed\t" << killNum << "\tstates\n";
+	std::cerr << "+++++++++++++++++++++++++++++++++++\n";
+}
+
+/*
+bool GuidedPathSearcher::done(int index)//判断一条路径是否完成，根据最后一个leaf BB的指令是否全部被执行到了。
+{
+  std::map<llvm::Instruction*, bool> *instMap = &instMaps[index];
+  if (instMap == NULL)
+    return true;
+  if (instMap->empty())
+    return true;
+
+  for(std::map<llvm::Instruction*, bool>::iterator it = instMap->begin(); it != instMap->end(); ++it)
+	if (!it->second)
+	  return false;
+  return true;
+}
+
+bool GuidedPathSearcher::allDone(void)
+{
+  int ctr=0;
+  for(std::vector<pathType>::iterator pit=paths.begin(); pit != paths.end(); ++pit, ctr++) {
+	if (!done(ctr))
+	  return false;
+	}
+  return true;
+}
+int GuidedPathSearcher::left(int index)//得到某一条路径最后一个bb还剩下多少条指令未执行
+{
+  std::map<llvm::Instruction*, bool> *instMap = &instMaps[index];
+
+  int ctr = 0;
+  for(std::map<llvm::Instruction*, bool>::iterator it = instMap->begin(); it != instMap->end(); ++it)
+	if (!it->second)
+	  ctr++;
+  return ctr;
+}
+*/
+
+void GuidedPathSearcher::killAllStates(void)
+{
+  for (std::vector<ExecutionState*>::iterator it = states.begin(); it != states.end(); ++it) {
+	executor.terminateStateEarly(**it, "GuidedSearcher -- Path reached");
+  }
+  empty();
+}
+#if 1
+bool instInUcLibcOrPOSIX(Instruction* I) {
+	MDNode *MD = I->getDebugLoc().getAsMDNode(I->getContext());
+	if (!MD)
+		return true;
+	DILocation Loc(MD);
+	SmallString<64> absolutePath;
+	StringRef Filename = DIScope(Loc.getScope()).getFilename();
+	if (sys::path::is_absolute(Filename))
+		absolutePath.append(Filename.begin(), Filename.end());
+	else
+		sys::path::append(absolutePath, DIScope(Loc.getScope()).getDirectory(), Filename);
+
+	std::string strPath = absolutePath.str();
+	if (strPath.find("klee-uclibc") != std::string::npos || strPath.find("POSIX") != std::string::npos) {
+		return true;
+	}
+	return false;
+}
+
+ExecutionState &GuidedPathSearcher::selectState()
+{
+	/*
+	if (paths.size()==0) {
+		std::cerr << ">>>>>GuidedSearcher: Error, no paths! Terminating all states\n";
+		killAllStates();
+	}
+	*/
+
+	bool inMainBbAfter = false;
+	for (std::vector<ExecutionState*>::iterator it = states.begin(); it != states.end(); ++it) {
+		ExecutionState *state = *it;
+		Instruction *state_i = state->pc->inst;
+
+		bool inUcLibcOrPOSIX = instInUcLibcOrPOSIX(state_i);
+		if (inUcLibcOrPOSIX) {//not to kill
+			return *state;
+		}
+		else {
+			BasicBlock *state_bb = state_i->getParent();
+			Function *state_func = state_bb->getParent();
+			if (find(otherCalledFuncs.begin(), otherCalledFuncs.end(), state_func) != otherCalledFuncs.end()) {//in otherCalledFuncs, not to kill
+				return *state;
+			}
+			else {//not libcOrPosix && not otherCalledFuncs; so, now state is in MainPathFuncs or in funcs not related at all.
+				if (relatedFuncAndBbs.find(state_func) != relatedFuncAndBbs.end()) {//in mainPathFuncs
+					if (find(relatedFuncAndBbs[state_func].begin(), relatedFuncAndBbs[state_func].end(), state_bb) != relatedFuncAndBbs[state_func].end())
+						return *state;//in mainPath totally used bbs
+					else {
+						for (int i = 0; i < targetRelatedFuncs[state_func].size(); i++) {
+							Instruction *call_inst = targetRelatedFuncs[state_func].at(i);
+							BasicBlock *call_bb = call_inst->getParent();
+							if (call_bb == state_bb) {// in mainPath notTotoally used bbs
+								for (BasicBlock::iterator inst = call_bb->begin(); inst != call_bb->end(); inst++) {
+									if (&*inst == state_i)// and before the callInst
+										return *state;
+									if (&*inst == call_inst)
+										break;
+								}
+							}
+							inMainBbAfter = true;
+						}
+					}
+				}
+			}
+		}
+		BasicBlock *state_bb = state_i->getParent();
+		Function *state_func = state_bb->getParent();
+		dbgs() << "[GuidePath]\tstate_func:\t" << state_func->getName() << "\tstate_bb:\t" << state_bb->getName() << "\t\t" << inMainBbAfter << "\n";
+		executor.terminateStateOnError(*state, "This state is not related with our target.",  "[GuidedPath]");
+		killNum ++;
+	}
+	return *states[theRNG.getInt32()%states.size()];
+}
+
+#else
+ExecutionState &GuidedPathSearcher::selectState()
+{
+	if (paths.size()==0) {
+		std::cerr << "GuidedSearcher: Error, no paths! Terminating all states\n";
+		killAllStates();
+	}
+
+  //  std::cerr << "selectState: processing " << states.size() << " state(s)\n";
+
+  for (std::vector<ExecutionState*>::iterator it = states.begin(); it != states.end(); ++it) {
+	ExecutionState *state = *it;
+	Instruction *state_i = state->pc->inst;
+	BasicBlock *state_bb = state_i->getParent();
+
+	// Loop over all paths...
+	// States can go in and out of different paths, we can't really control that,
+	// so we keep picking states in paths that are not done yet.
+	// .. and when a state executes the last instruction in a BB leaf, we terminate that state
+	// (in order to generate the test case)
+	// ... and when all paths are complete, we stop all together.
+
+	int ctr=0;  // for index into instMaps
+	for(std::vector<pathType>::iterator pit=paths.begin(); pit != paths.end(); ++pit, ctr++) {
+	  pathType path = *pit;
+
+	  // Are we done with this path?
+	  if (done(ctr))
+		continue;
+
+	  // The idea here is to pick a state that has it's PC in a BB that's in the path.
+	  // Preferrably as close to the leaf BB as possible, thus
+	  // we travese the path in reverse order and return first match.
+
+	  for (pathType::reverse_iterator bbit = path.rbegin(); bbit != path.rend(); ++bbit) {
+		BasicBlock *BB = *bbit;
+#if 0
+		std::cerr << "  trying s[" << state  << "] " << " p[" << ctr << "] " << BB << " "
+				  << BB->getParent()->getNameStr() << " >state: "
+				  << "{" << state_bb << " " << state_bb->getParent()->getNameStr() << "}\n";
+#endif
+		// is the state_bb in our path?
+		if (state_bb == BB) {
+		  instMaps[ctr][state_i] = true;//每执行到一个path的一条指令，就记录这个path的这条指令被执行过了。
+		  // Are we done? Terminate this state and write out info
+		  // FIX: Doesn't this mean that we wont run the last instruction in the BB?
+		  if (done(ctr)) {
+			std::cerr << "---xyj---to see how many states here: before kill" <<  states.size() << "  states\n";
+			executor.terminateStateOnError(*state, "BB completed", "guidedsearcher");
+			std::cerr << "---xyj---to see how many states here:  After kill" <<  states.size() << "  states\n";
+			continue;
+		  }
+#if 0 
+		  if (miss_ctr != 0) {
+			std::cerr << miss_ctr << " path misses [" << states.size() << " state(s)]\n";
+			miss_ctr=0;
+		  }
+		  if (bbit == path.rbegin())
+			std::cerr << "! new hit in leaf [p: " << ctr << " (" << left(ctr) << ")]\n";
+		  else
+			std::cerr << "* hit " << state->pc->inst->getParent()->getParent()->getNameStr()
+					  << " [p: " << ctr << " (" << left(ctr) << ")]\n";
+#endif
+		  return *state;
+		}
+	  }
+	}
+
+	if (allDone()) {
+	  std::cerr << "GuidedSearcher done -- terminating remaining states\n";
+	  killAllStates();
+	}
+  }
+  // std::cerr << "- found no match\n";
+  miss_ctr++;
+  //if ((miss_ctr%1000) == 0)
+	//std::cerr << miss_ctr << " path misses [" << states.size() << " state(s)]...\n";
+  return *states[theRNG.getInt32()%states.size()];  // pick a random state (this will help with fork bombing)
+}
+#endif
+
+void GuidedPathSearcher::update(ExecutionState *current,
+                         const std::set<ExecutionState*> &addedStates,
+                         const std::set<ExecutionState*> &removedStates) {
+
+  if (addedStates.size()==0 && removedStates.size()==0)
+	return;
+
+//  std::cerr << "Adding " << addedStates.size() << " & removing " << removedStates.size() << " state(s)\n";
+
+  states.insert(states.end(),
+                addedStates.begin(),
+                addedStates.end());
+  for (std::set<ExecutionState*>::const_iterator it = removedStates.begin(),
+         ie = removedStates.end(); it != ie; ++it) {
+    ExecutionState *es = *it;
+    if (es == states.back()) {
+      states.pop_back();
+    } else {
+      bool ok = false;
+
+      for (std::vector<ExecutionState*>::iterator it = states.begin(),
+             ie = states.end(); it != ie; ++it) {
+        if (es==*it) {
+          states.erase(it);
+          ok = true;
+          break;
+        }
+      }
+
+      assert(ok && "invalid state removed");
+    }
+  }
+}
+bool GuidedPathSearcher::empty() {
   return executor.states.empty(); 
 }
 
