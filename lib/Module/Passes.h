@@ -113,18 +113,18 @@ private:
 
 	// modification by wh
 	// a new struct of storing paths
-	llvm::BasicBlock *BB;
+	llvm::BasicBlock *targetBB;
 	llvm::BasicBlock **targetBbpp;
 	entire_path *evo_paths;
 	func_bbs_type *filter_paths;//跟目标路径有关的所有Function和Function出口
 	// a structure to store a big map of pahts
-	pathsInFuncMapType *BB_paths_map;//一个Map，映射关系：（pair<funtion, 出口bb>, function的entry到这个出口的过程中涉及到的所有的bb）
+	pathsInFuncMapType *BB_paths_map;//一个Map，映射关系：（pair<funtion, 出口inst>, function的entry到这个出口的过程中涉及到的所有的bb）
 	// modification by wh
 	void explore_function_paths(Function *srcFunc, Function *dstFunc, Instruction *inst, std::vector<std::pair< Function*, Instruction*> > *tmp_func_path);
 	void explore_basicblock_paths(Function *F, BasicBlock *BB, std::vector<BasicBlock*> *tmp_bb_path);
 	void collect_funcitons(Function *srcFunc, Function *dstFunc, Instruction *inst, std::vector<std::pair<Function*, Instruction*> > *tmp_func_path);
 
-	Instruction* bug_Inst;
+	Instruction* target_Inst;
 
 	BasicBlock *getBB(std::string srcFile, int srcLine);
 	bool findLineInBB(BasicBlock *BB, std::string srcFile, unsigned srcLine);

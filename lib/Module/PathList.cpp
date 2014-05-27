@@ -28,13 +28,16 @@ ModulePass *llvm::createPathListPass(std::vector<std::vector<BasicBlock*> > &_pa
 
 PathList::PathList() : ModulePass(ID) {}
 
-PathList::PathList(std::string _filename, int _lineno,func_bbs_type *func_bbs, pathsInFuncMapType *pathsInFuncMap, std::vector< Function* > *_otherCalledFuncs, BasicBlock *&targetBbp) : ModulePass(ID) {
-        this->fileName = _filename;
-        this->lineNo = _lineno;
-        this->filter_paths = func_bbs;
-		this->BB_paths_map = pathsInFuncMap;
-		this->otherCalledFuncs = _otherCalledFuncs;
-		this->targetBbpp = &targetBbp;
+PathList::PathList(std::string _filename, int _lineno, \
+		func_bbs_type *func_bbs, pathsInFuncMapType *pathsInFuncMap, \
+		std::vector< Function* > *_otherCalledFuncs, BasicBlock *&targetBbp) \
+	: ModulePass(ID) {
+	this->fileName = _filename;
+	this->lineNo = _lineno;
+	this->filter_paths = func_bbs;
+	this->BB_paths_map = pathsInFuncMap;
+	this->otherCalledFuncs = _otherCalledFuncs;
+	this->targetBbpp = &targetBbp;
 	llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
 	llvm::initializeBasicCallGraphPass(Registry);
 	llvm::initializeCallGraphAnalysisGroup(Registry);                                 
@@ -78,7 +81,7 @@ bool PathList::findLineInBB(BasicBlock* BB, std::string srcFile, unsigned int sr
 			unsigned bbLine, bbCol;
 			std::string bbFile = getInstPath(I, bbLine, bbCol);
 			if ((bbFile == srcFile) && (bbLine == srcLine)) {
-				bug_Inst = I;
+				target_Inst = I;
 				return true;
 			}
 		}
@@ -369,117 +372,83 @@ bool PathList::runOnModule(Module &M) {
 	
 	llvm::dbgs() << "[runOnModule]: Moduel M has " << M.getFunctionList().size() << " Functions in all.\n";
 	
-	// for test
-	Function *f1 = M.getFunction("fprintf");
-	if (!f1)
-		dbgs() << "[Test]: can not find function fprintf.\n";
-	else
-		dbgs() << "[Test]: find function fprintf.\n";
-	  
 	CallGraph &CG = getAnalysis<CallGraph>();
-//	CG.dump();
+	//CG.dump();
 	
 	CallGraphNode *cgNode = CG.getRoot();
-	cgNode->dump();
-//	errs()<<node->getFunction()->getName()<<'\n';
+	//cgNode->dump();
 	
-	Function *startFunc;
-	Function *endFunc;
-	startFunc = M.getFunction("__user_main");
-	
-	//std::string fileName("/home/xqx/data/xqx/projects/benckmarks-klee/texinfo-4.8/build-shit/makeinfo/../../makeinfo/insertion.c");
-	//int lineNo = 407;
-	
-	BB = getBB(fileName, lineNo);
-	*targetBbpp = getBB(fileName, lineNo);
-	if (BB) {
-		endFunc = BB->getParent();
+	Function *startFunc = NULL;
+	Function *endFunc = NULL;
+	//set startFunc 
+	Function *userMainFunc = M.getFunction("__user_main");
+	if (userMainFunc)
+		startFunc = userMainFunc;
+	else
+		startFunc = M.getFunction("main");
+	//This shoule not happen.
+	if (!startFunc) {
+		errs()<<"Error: get startFunc failed.\n";
+		return false;
+	}
+	//get endBB and endFunc
+	targetBB = getBB(fileName, lineNo);
+	*targetBbpp = targetBB;
+	if (targetBB) {
+		endFunc = targetBB->getParent();
 		if (!endFunc) {
 			errs()<<"Error: get endFunc failed.\n";
 			return false;
 		}
-		if (!startFunc) {
-		  	errs()<<"Error: get startFunc failed.\n";
-			return false;
-		}
-		errs()<<startFunc->getName()<<'\n';
 	}
 	else {
-		errs()<<"Error: get BB failed.\n";
+		errs()<<"Error: get targetBB failed.\n";
 		return false;
 	}
-	
-	
-	
-	//read start and end from xml files
-//	defectList enStart, enEnd;
-//	getEntryList("/tmp/entrys.xml", &enStart, "start");
-//	getEntryList("/tmp/entrys.xml", &enEnd, "end");
-//	getEntryList("/tmp/entrys.xml", &dl, "end");
-//	dumpEntryList(&enStart);
-//	dumpEntryList(&enEnd);
-//	dumpEntryList(&dl);
-	
-	//read bug information from xml file
-/*	for (defectList::iterator dit = dl.begin(); dit != dl.end(); dit++) {
-		StringRef file(dit->first.c_str());
-		std::vector<int> lines = dit->second;
-		BasicBlock *BB = getBB(file, *(lines.begin()));
-		if (BB) {
-			endFunc = BB->getParent();
-		}
-	}
-*/	
-	//to store temporary path
-	std::vector<BasicBlock*> p;
-	// a counter
-	int map_count = 0;
-	
+
+	// set calledFunctionMap
 	for (Module::iterator i = M.begin(), e = M.end(); i != e; ++i) {
-		Function *F = i;
+		Function *F = &*i;
 		if (!F) {
 			llvm::errs() << "***NULL Function***\n";
 			continue;
 		}
 		cgNode = CG.getOrInsertFunction(F);
 		F = cgNode->getFunction();
-//		
+
 		for (CallGraphNode::iterator I = cgNode->begin(), E = cgNode->end();
 				I != E; ++I){
 			CallGraphNode::CallRecord *cr = &*I;
-//			llvm::errs() << "\tCS<" << cr->first << "> calls";
 			// check if the CallInst is existed
-			if(cr->first){
-				Instruction *TmpIns = dyn_cast<Instruction>(cr->first);
-				if(TmpIns) {
-//					errs() << "\t" << *TmpIns << "\n";
-					//unsigned int l, c;
-					//std::string cfi_path = getInstPath(TmpIns, l, c);
-					//if (!cfi_path.empty()) {
-					//	if (cfi_path.find("uclibc") != std::string::npos) {
-					//		dbgs() << "[Filter Uclib]: find an instruction from uclibc.\n";
-					//		continue;
-					//	} else if (cfi_path.find("POSIX") != std::string::npos) {
-					//		dbgs() << "[Filter Uclib]: find an instruction from POSIX.\n";
-					//		continue;
-					//	}
-					//}
-				} else
-					continue;
-			}
+			/*
+			 *if(cr->first){
+			 *    Instruction *TmpIns = dyn_cast<Instruction>(cr->first);
+			 *    if(TmpIns) {
+			 *        errs() << "\t" << *TmpIns << "\n";
+			 *        unsigned int l, c;
+			 *        std::string cfi_path = getInstPath(TmpIns, l, c);
+			 *        if (!cfi_path.empty()) {
+			 *            if (cfi_path.find("uclibc") != std::string::npos) {
+			 *                dbgs() << "[Filter Uclib]: find an instruction from uclibc.\n";
+			 *                continue;
+			 *            } else if (cfi_path.find("POSIX") != std::string::npos) {
+			 *                dbgs() << "[Filter Uclib]: find an instruction from POSIX.\n";
+			 *                continue;
+			 *            }
+			 *        }
+			 *    } else
+			 *        continue;
+			 *}
+			 */
 			// get the funciton pointer which is called by current CallRecord cr
 			Function *FI = cr->second->getFunction();
 			if (!FI)
 				continue;
-			
 			// create a new CalledFunctions element and push it into calledFunctionMap.
-			calledFunctionMap[FI].push_back(std::make_pair(F, dyn_cast<Instruction>(cr->first)));
-			// for debuging
-			map_count++;			
+			calledFunctionMap[FI].push_back(\
+					std::make_pair(F, dyn_cast<Instruction>(cr->first)));
 		}
-
 	}
-	
 	dbgs() << "[Count Number of calledFunctionMap]: "<< calledFunctionMap.size() <<'\n';
 	
 	// analyze the global function pointer table
@@ -489,124 +458,136 @@ bool PathList::runOnModule(Module &M) {
 		errs() << "[Analyze global function pointer table failed]\n";
 	}
 	
-	dbgs() << "[Count Number of calledFunctionMap]: "<< calledFunctionMap.size() <<'\n';
+	dbgs() << "[Count Number of calledFunctionMap](with function pointer): "\
+		<< calledFunctionMap.size() <<'\n';
 	
-	// filter the instructions from uclibc
+	/*
+	 *filter the instructions from uclibc
+	 */
 	//filter_uclibc();
 
-	llvm::errs() << "=================================hh\n";
-	llvm::errs() << "get Function Path: " << endFunc->getName() 
-		<< " to " << startFunc->getName() << " \n";
-	
-//	printCalledFuncAndCFGPath(endFunc, startFunc, BB, p);
-		
-	// modification by wh
-	evo_paths = new entire_path;
-	//filter_paths = new func_bbs_type;
-	//BB_paths_map = new std::map<std::pair<Function*, BasicBlock*>, std::vector<BasicBlock*> >;
-	std::vector<std::pair< Function*, Instruction*> > tmp_func_path;
-//	std::vector<BasicBlock*> tmp_bb_path;
-//	explore_function_paths(endFunc, startFunc, bug_Inst, &tmp_func_path);
-	collect_funcitons(endFunc, startFunc, bug_Inst, &tmp_func_path);
-//	dbgs() << "++++++Found " << evo_paths->size() << " function paths.\n";
-	
-//	for (entire_path::iterator ep_it = evo_paths->begin(); ep_it != evo_paths->end(); ep_it++) {
-//		for (std::vector<std::pair< Function*, Instruction*> >::iterator pair_it = ep_it->begin(); pair_it != ep_it->end(); pair_it++) {
-//			if (filter_paths->size() != 0) {
-//				std::vector<Instruction*>::iterator inst_it = std::find((*filter_paths)[pair_it->first].begin(), (*filter_paths)[pair_it->first].end(), pair_it->second);
-//				if (inst_it != (*filter_paths)[pair_it->first].end()) {
-//					continue;
-//				}
-//			}
-//			(*filter_paths)[pair_it->first].push_back(pair_it->second);
-//		}
-//	}
+	llvm::errs() << "==========Start searching==========\n";
+	llvm::errs() << "get Function Path: [endFunc] " \
+		<< endFunc->getName() << " [startFunc] " << startFunc->getName() \
+		<< "\n";
+
+	/*
+	 *搜集主路径函数，放入filter_paths
+	 */
+	std::vector<std::pair< Function*, Instruction*> > *tmp_func_path = new std::vector<std::pair< Function*, Instruction*> >;
+	collect_funcitons(endFunc, startFunc, target_Inst, tmp_func_path);
+	delete(tmp_func_path);
 	dbgs() << "[filter_paths]: contain " << filter_paths->size() << " functions in all.\n";
 	
+	/*
+	 *搜集函数内部相关BB
+	 */
 	for (func_bbs_type::iterator fbs_it = filter_paths->begin(); fbs_it != filter_paths->end(); fbs_it++) {
-		for (std::vector<Instruction*>::iterator bb_it2 = fbs_it->second.begin(); bb_it2 != fbs_it->second.end(); bb_it2++) {
-			dbgs() << "^^^^^^ " << fbs_it->first->getName() << ": " << (*bb_it2)->getParent()->getName() << '\n';
-			// to expand functions
-			call_insts.push_back((*bb_it2));
-			
-			explore_basicblock_paths(fbs_it->first, (*bb_it2)->getParent(), &(*BB_paths_map)[std::make_pair(fbs_it->first, *bb_it2)]);
-			dbgs() << "^^^^^^ found " << (*BB_paths_map)[std::make_pair(fbs_it->first, *bb_it2)].size() << " basicblocks.\n";
+
+		Function *func = fbs_it->first;
+		std::vector<Instruction*> callOutInsts = fbs_it->second;
+
+		for (std::vector<Instruction*>::iterator instsIt = callOutInsts.begin(); \
+				instsIt != callOutInsts.end(); instsIt++) {
+
+			Instruction *inst = *instsIt;
+			BasicBlock *bb = inst->getParent();
+
+			call_insts.push_back(inst);
+			std::vector<BasicBlock*> *bbs = &(*BB_paths_map)[std::make_pair(func, inst)];
+			explore_basicblock_paths(func, bb, bbs);
 		}
 	}
 	
 	llvm::dbgs() << "!!!!!!!! Found " << call_insts.size() << " call instructions.\n";
 	llvm::dbgs() << "!!!!!!!! Found " << path_basicblocks.size() << " path basicblocks.\n";
 	
-	// expand functions
+	/*
+	 *下面两个for循环，搜集主路径所有函数, entry 到 callOutInst之间所有的call指令
+	 *放入path_call_insts里面
+	 */
 	for (std::vector<Instruction*>::iterator ci_it = call_insts.begin(); ci_it != call_insts.end(); ci_it++) {
-		BasicBlock *call_bb = (*ci_it)->getParent();
-		if (!call_bb) {
+
+		Instruction *callOutInst = *ci_it;
+		BasicBlock *callOutBB = callOutInst->getParent();
+
+		if (!callOutBB) {
 			continue;
 		}
-		for (BasicBlock::iterator inst = call_bb->begin(); inst != call_bb->end(); inst++) {
-			if (&*inst == *ci_it) {
+
+		for (BasicBlock::iterator instIt = callOutBB->begin(); \
+				instIt != callOutBB->end(); instIt++) {
+
+			Instruction *inst = &*instIt;
+
+			if (inst == callOutInst) {
 				break;
 			}
-			if (isa<CallInst>(&*inst)) {
-				std::vector<Instruction*>::iterator ci = std::find(path_call_insts.begin(), path_call_insts.end(), &*inst);
+			if (isa<CallInst>(inst)) {
+				std::vector<Instruction*>::iterator ci = std::find(\
+						path_call_insts.begin(), path_call_insts.end(), inst);
 				if (ci != path_call_insts.end())
 					continue;
-				path_call_insts.push_back(&*inst);
+				path_call_insts.push_back(inst);
 			}
 		}
 	}
-	llvm::dbgs() << "@@@@@@@@ After search call_insts, found " << path_call_insts.size() << " call instructions.\n";
 	for (std::vector<BasicBlock*>::iterator p_bb_it = path_basicblocks.begin(); p_bb_it != path_basicblocks.end(); p_bb_it++) {
-		for (BasicBlock::iterator inst = (*p_bb_it)->begin(); inst != (*p_bb_it)->end(); inst++) {
-			if (isa<CallInst>(&*inst)) {
-				std::vector<Instruction*>::iterator ci = std::find(path_call_insts.begin(), path_call_insts.end(), &*inst);
-				if (ci != path_call_insts.end())
-					continue;
-				path_call_insts.push_back(&*inst);
+
+		BasicBlock *bb = *p_bb_it;
+
+		for (BasicBlock::iterator instIt = bb->begin(); instIt != bb->end(); instIt++) {
+
+			Instruction *inst = &*instIt;
+
+			if (isa<CallInst>(inst)) {
+				std::vector<Instruction*>::iterator ci = std::find(path_call_insts.begin(), path_call_insts.end(), inst);
+				if (ci == path_call_insts.end())
+					path_call_insts.push_back(inst);
 			}
 		}
 	}
-	llvm::dbgs() << "@@@@@@@@ After search path_basicblocks, found " << path_call_insts.size() << " call instructions.\n";
+	llvm::dbgs() << "主路径所有函数: entry到callOutInst之间所有的call指令: " << path_call_insts.size() << " call instructions.\n";
+
+	/*
+	 *下面两个for循环用于记录path_call_insts调用的函数（非主路径函数）
+	 *放到otherCalledFuncs里面
+	 */
 	for (std::vector<Instruction*>::iterator iit = path_call_insts.begin(); iit != path_call_insts.end(); iit++) {
 		CallInst *ci = dyn_cast<CallInst>(*iit);
 		if (!ci)
 			continue;
 		Function *ff = ci->getCalledFunction();
+		//存在获取不到被调用函数的可能性
 		if (!ff) {
 			//ci->dump();
 			//dbgs() << "\t[called value] " << ci->getOperand(0)->getName() << '\n'; 
-			
 			continue;
 		}
 		std::vector<Function*>::iterator fit = std::find(otherCalledFuncs->begin(), otherCalledFuncs->end(), ff);
 		if (fit == otherCalledFuncs->end())
 			otherCalledFuncs->push_back(ff);
 	}
-	llvm::dbgs() << "((((((((( Found " << otherCalledFuncs->size() << " functions.\n";
-	
+	//otherCalledFuncs可能再调用别的函数，所以要继续搜索
 	for (int index = 0; index < otherCalledFuncs->size(); index++) {
 		Function *f = otherCalledFuncs->at(index);
-/*		if (!f) {
-			//f->dump();
-			llvm::dbgs() << "?????? index = " << index << " size = " << otherCalledFuncs->size()<< '\n';
-			continue;
-		}
-*/		for (inst_iterator f_it = inst_begin(f); f_it != inst_end(f); f_it++) {
+		for (inst_iterator f_it = inst_begin(f); f_it != inst_end(f); f_it++) {
 			CallInst *ci = dyn_cast<CallInst>(&*f_it);
 			if (!ci)
 				continue;
-			if (!ci->getCalledFunction()) {
+			Function *calledFunc = ci->getCalledFunction();
+			if (!calledFunc) {
 				//ci->dump();
 				continue;
 			}
-			std::vector<Function*>::iterator fit = std::find(otherCalledFuncs->begin(), otherCalledFuncs->end(), ci->getCalledFunction());
+			std::vector<Function*>::iterator fit = std::find(otherCalledFuncs->begin(), otherCalledFuncs->end(), calledFunc);
 			if (fit == otherCalledFuncs->end())
 				otherCalledFuncs->push_back(ci->getCalledFunction());
 		}
 	}
-	llvm::dbgs() << "((((((((( Found " << otherCalledFuncs->size() << " functions.\n";
+	llvm::dbgs() << "非主路径上的函数: " << otherCalledFuncs->size() << " functions.\n";
 	
-	//This should be just for statistic.
+	//Just for statistic.
 	int tmp_funcNum_in_filter_notIn_other = 0;
 	for (func_bbs_type::iterator fbs_it = filter_paths->begin(); fbs_it != filter_paths->end(); fbs_it++) {
 		if (!fbs_it->first) {
@@ -618,32 +599,10 @@ bool PathList::runOnModule(Module &M) {
 			//otherCalledFuncs->push_back(fbs_it->first);
 			tmp_funcNum_in_filter_notIn_other ++;
 	}
-	llvm::dbgs() << "<><><><> After searching filter_paths, found " << otherCalledFuncs->size() + tmp_funcNum_in_filter_notIn_other << " functions.\n";
-/*	for (entire_path::iterator ep_it = evo_paths->begin(); ep_it != evo_paths->end(); ep_it++) {
-		dbgs() << "Path length is: " << ep_it->size() << '\n';
-		for (std::vector<std::pair< Function*, BasicBlock*> >::iterator pair_it = ep_it->begin(); pair_it != ep_it->end(); pair_it++) {
-			 dbgs() << "^^^^^^ " << pair_it->first->getName() << ": " << pair_it->second->getName() << '\n';
-			 explore_basicblock_paths(pair_it->first, pair_it->second, &(*BB_paths_map)[*pair_it]);
-			 dbgs() << "^^^^^^ found " << (*BB_paths_map)[*pair_it].size() << " basicblocks.\n";
-		}
-	}
-*/		
-	llvm::errs() << "on-end\n";
-	llvm::errs() << "=================================\n";
-	
-	// output all of the paths
-/*	errs()<<"Find "<<paths_found->size()<<" paths in all.\n";
-	for(paths::iterator ips = paths_found->begin();ips != paths_found->end();ips++) {
-//		std::vector<BasicBlock*> *tmpP = dyn_cast<std::vector<BasicBlock*>*>(&*ips);
-		dbgs() << "=========A Path Start============\n";
-		for(std::vector<BasicBlock*>::iterator ps = ips->begin(), pe = ips->end(); ps != pe; ps++) {
-			BasicBlock *tmpStr = *ps;
-			errs()<<"\t"<<tmpStr->getParent()->getName()<<": "<<tmpStr->getName()<<" -> \n";
-		}
-		errs()<<"=================================\n";
-	}
-*/	
-	return false;
+	llvm::dbgs() << "Num of all related functions: " << otherCalledFuncs->size() + tmp_funcNum_in_filter_notIn_other << "\n";
+	llvm::errs() << "==========searching done!==========\n";
+
+	return true;
 }
 
 //////////////modification by wh
