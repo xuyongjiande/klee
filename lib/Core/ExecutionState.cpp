@@ -69,6 +69,7 @@ StackFrame::~StackFrame() {
 
 ExecutionState::ExecutionState(KFunction *kf) 
   : fakeState(false),
+    number(0),
     underConstrained(false),
     depth(0),
     pc(kf->instructions),
@@ -88,6 +89,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions) 
   : fakeState(true),
+    number(0),
     underConstrained(false),
     constraints(assumptions),
     queryCost(0.),
@@ -112,6 +114,8 @@ ExecutionState::~ExecutionState() {
 
 ExecutionState::ExecutionState(const ExecutionState& state)
   : fnAliases(state.fnAliases),
+    number(state.number),
+    path(state.path),
     fakeState(state.fakeState),
     underConstrained(state.underConstrained),
     depth(state.depth),

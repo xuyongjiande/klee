@@ -127,6 +127,7 @@ using namespace metaSMT::solver;
 #endif /* SUPPORT_METASMT */
 
 
+static int forks = 0;//xyj
 
 namespace {
   cl::opt<bool>
@@ -659,6 +660,8 @@ void Executor::branch(ExecutionState &state,
       ExecutionState *es = result[theRNG.getInt32() % i];
       ExecutionState *ns = es->branch();
       addedStates.insert(ns);
+      ns->number = ++forks;
+      klee_message("[State %d Fork: %d]\n", state.number, ns->number);
       result.push_back(ns);
       es->ptreeNode->data = 0;
       std::pair<PTree::Node*,PTree::Node*> res = 
@@ -877,6 +880,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
 
     falseState = trueState->branch();
     addedStates.insert(falseState);
+    falseState->number = ++forks;
+    klee_message("[State %d Fork: %d]\n", trueState->number, falseState->number);
 
     if (RandomizeFork && theRNG.getBool())
       std::swap(trueState, falseState);
@@ -1186,6 +1191,31 @@ void Executor::executeCall(ExecutionState &state,
                            KInstruction *ki,
                            Function *f,
                            std::vector< ref<Expr> > &arguments) {
+  //---xyj
+  std::string funcName = f->getName().str();
+  if (funcName.find("klee") == std::string::npos \
+          && funcName.find("alloc") == std::string::npos \
+          && funcName.find("free") == std::string::npos \
+          && funcName.find("memset") == std::string::npos \
+          && funcName.find("memcpy") == std::string::npos) {
+      if (state.path.empty()) {
+        state.path.push_back(std::make_pair(f, 1));
+      }
+      else {
+        Function *lastFunc = state.path.back().first;
+        if (lastFunc == f) {
+            int newNum = state.path.back().second ++;
+            //state.path.pop_back();
+            //state.path.push_back(std::make_pair(f, newNum));
+        }
+        else {
+            state.path.push_back(std::make_pair(f, 1));
+        }
+      }
+  }
+  //会输出非常多的信息，可用来看函数详细调用的情况
+  //klee_message("[State: %5d] call %s", state.number, f->getName().str().c_str());
+  //---
   Instruction *i = ki->inst;
   if (f && f->isDeclaration()) {
     switch(f->getIntrinsicID()) {
@@ -2686,6 +2716,10 @@ std::string Executor::getAddressInfo(ExecutionState &state,
 }
 
 void Executor::terminateState(ExecutionState &state) {
+  klee_message("[TerminateState] %d", state.number);
+  for (std::vector<std::pair<Function*, int> >::iterator it = state.path.begin(); it != state.path.end(); it++) {
+      klee_message("\t[State %d] call %d \ttimes %s",state.number, (*it).second  , (*it).first->getName().str().c_str());//xyj
+  }
   if (replayOut && replayPosition!=replayOut->numObjects) {
     klee_warning_once(replayOut, 
                       "replay did not consume all objects in test input.");

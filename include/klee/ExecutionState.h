@@ -10,6 +10,7 @@
 #ifndef KLEE_EXECUTIONSTATE_H
 #define KLEE_EXECUTIONSTATE_H
 
+#include "llvm/Function.h"
 #include "klee/Constraints.h"
 #include "klee/Expr.h"
 #include "klee/Internal/ADT/TreeStream.h"
@@ -66,6 +67,8 @@ typedef uint64_t u64;
 
 class ExecutionState {
 public:
+  int number;//state的一个编号，从0开始
+  std::vector< std::pair<llvm::Function*, int> > path;
   typedef std::vector<StackFrame> stack_ty;
 
 private:
