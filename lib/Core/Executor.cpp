@@ -1192,29 +1192,31 @@ void Executor::executeCall(ExecutionState &state,
                            Function *f,
                            std::vector< ref<Expr> > &arguments) {
   //---xyj
+  Function *fromFunc = ki->inst->getParent()->getParent();
+  std::string fromFuncName = fromFunc->getName().str();
   std::string funcName = f->getName().str();
   if (funcName.find("klee") == std::string::npos \
           && funcName.find("alloc") == std::string::npos \
           && funcName.find("free") == std::string::npos \
           && funcName.find("memset") == std::string::npos \
+          && funcName.find("puts") == std::string::npos \
           && funcName.find("memcpy") == std::string::npos) {
       if (state.path.empty()) {
-        state.path.push_back(std::make_pair(f, 1));
+        state.path.push_back(std::make_pair(std::make_pair(fromFunc, f), 1));
       }
       else {
-        Function *lastFunc = state.path.back().first;
-        if (lastFunc == f) {
-            int newNum = state.path.back().second ++;
-            //state.path.pop_back();
-            //state.path.push_back(std::make_pair(f, newNum));
+        Function *oldfrom = state.path.back().first.first;
+        Function *oldto = state.path.back().first.second;
+        if (oldfrom == fromFunc && oldto == f) {
+            state.path.back().second ++;
         }
         else {
-            state.path.push_back(std::make_pair(f, 1));
+            state.path.push_back(std::make_pair(std::make_pair(fromFunc, f), 1));
         }
       }
   }
   //会输出非常多的信息，可用来看函数详细调用的情况
-  //klee_message("[State: %5d] call %s", state.number, f->getName().str().c_str());
+  //klee_message("[State %5d] call %s()", state.number, f->getName().str().c_str());
   //---
   Instruction *i = ki->inst;
   if (f && f->isDeclaration()) {
@@ -2716,9 +2718,9 @@ std::string Executor::getAddressInfo(ExecutionState &state,
 }
 
 void Executor::terminateState(ExecutionState &state) {
-  klee_message("[TerminateState] %d", state.number);
-  for (std::vector<std::pair<Function*, int> >::iterator it = state.path.begin(); it != state.path.end(); it++) {
-      klee_message("\t[State %d] call %d \ttimes %s",state.number, (*it).second  , (*it).first->getName().str().c_str());//xyj
+  klee_message("[TerminateState] %5d", state.number);
+  for (ExecutionState::xyjPathType::iterator it = state.path.begin(); it != state.path.end(); it++) {
+      klee_message(" -- [State %d] call %4d  times, %s() -> %s()",state.number, (*it).second, (*it).first.first->getName().str().c_str(), (*it).first.second->getName().str().c_str());//xyj
   }
   if (replayOut && replayPosition!=replayOut->numObjects) {
     klee_warning_once(replayOut, 

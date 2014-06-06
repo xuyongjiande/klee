@@ -68,7 +68,8 @@ typedef uint64_t u64;
 class ExecutionState {
 public:
   int number;//state的一个编号，从0开始
-  std::vector< std::pair<llvm::Function*, int> > path;
+  typedef std::vector< std::pair< std::pair<llvm::Function*, llvm::Function*>, int> > xyjPathType;
+  xyjPathType path;
   typedef std::vector<StackFrame> stack_ty;
 
 private:
