@@ -97,7 +97,14 @@ public:
 
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
 
+public://xyj
+  bool isCaredFunc_DDE(llvm::Function * f);
+
 private:
+  //---xyj 记录被调用的函数，用于统计函数覆盖率
+  std::set<llvm::Function *> calledFunctions;
+  std::set<std::string> externalFuncName;
+  //---
   class TimerInfo;
 
   KModule *kmodule;
