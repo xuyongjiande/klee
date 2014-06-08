@@ -728,7 +728,8 @@ void Executor::branch(ExecutionState &state,
   assert(N);
 
   //---xyj paths in state.pc's function increased N-1; Then we check is this Function generates too much paths!
-  Function *f = state.pc->inst->getParent()->getParent();
+  Instruction *inst = state.prevPC->inst;
+  Function *f = inst->getParent()->getParent();
   if (state.funcPathsNum.find(f) == state.funcPathsNum.end()) {
       state.funcPathsNum[f] = N;//equals init to 1, and then add N-1
   }
@@ -739,6 +740,13 @@ void Executor::branch(ExecutionState &state,
       klee_message("========================================================");
       klee_message("[WARNING] [State %d] Function: %s() has generated %d new paths.", \
                    state.number, f->getName().str().c_str(), state.funcPathsNum[f]);
+      if (MDNode *md = inst->getMetadata("dbg") ) {
+          DILocation Loc(md);
+          unsigned line = Loc.getLineNumber();
+          StringRef file = Loc.getFilename();
+          StringRef dir = Loc.getDirectory();
+          llvm::errs() << "===>>> FILE: " << dir << file << " LINE: " << line << "\n";
+      }
       klee_message("========================================================");
   }
   //---
@@ -975,7 +983,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     return StatePair(0, &current);
   } else {
       //--xyj: paths in state.pc's function increased 1; Then we check is this Function generates too much paths!
-      Function *f = current.pc->inst->getParent()->getParent();
+      Instruction *inst = current.prevPC->inst;
+      Function *f = inst->getParent()->getParent();
       if (current.funcPathsNum.find(f) == current.funcPathsNum.end()) {
           current.funcPathsNum[f] = 2;//equals init to 1, and then add 1
       }
@@ -986,6 +995,13 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
           klee_message("========================================================");
           klee_message("[WARNING] [State %d] Function: %s() has generated %d new paths.", \
                        current.number, f->getName().str().c_str(), current.funcPathsNum[f]);
+          if (MDNode *md = inst->getMetadata("dbg") ) {
+              DILocation Loc(md);
+              unsigned line = Loc.getLineNumber();
+              StringRef file = Loc.getFilename();
+              StringRef dir = Loc.getDirectory();
+              llvm::errs() << "===>>> FILE: " << dir << file << " LINE: " << line << "\n";
+          }
           klee_message("========================================================");
       }
       //---
