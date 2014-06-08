@@ -138,6 +138,9 @@ ExecutionState::ExecutionState(const ExecutionState& state)
     shadowObjects(state.shadowObjects),
     incomingBBIndex(state.incomingBBIndex)
 {
+  //---xyj
+  funcPathsNum = state.funcPathsNum;
+  //---
   for (unsigned int i=0; i<symbolics.size(); i++)
     symbolics[i].first->refCount++;
   //fwl added

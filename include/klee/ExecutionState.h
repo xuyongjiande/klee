@@ -71,6 +71,9 @@ public:
   typedef std::vector< std::pair< std::pair<llvm::Function*, llvm::Function*>, int> > xyjPathType;
   xyjPathType path;
   typedef std::vector<StackFrame> stack_ty;
+  //---xyj count pathsNum in each function
+  std::map<llvm::Function *, int> funcPathsNum;
+  //---
 
 private:
   //fwl added, for symbolic kernel-service

@@ -262,6 +262,11 @@ namespace {
   MaxMemoryInhibit("max-memory-inhibit",
             cl::desc("Inhibit forking at memory cap (vs. random terminate) (default=on)"),
             cl::init(true));
+
+  cl::opt<int>
+  WarnForks("warn-forks",
+            cl::desc("default=8, means if a function generates too much forks(>=8), you will get a warning on term."),
+            cl::init(8));
 }
 
 
@@ -722,6 +727,22 @@ void Executor::branch(ExecutionState &state,
   unsigned N = conditions.size();
   assert(N);
 
+  //---xyj paths in state.pc's function increased N-1; Then we check is this Function generates too much paths!
+  Function *f = state.pc->inst->getParent()->getParent();
+  if (state.funcPathsNum.find(f) == state.funcPathsNum.end()) {
+      state.funcPathsNum[f] = N;//equals init to 1, and then add N-1
+  }
+  else {
+      state.funcPathsNum[f] += N-1;
+  }
+  if (state.funcPathsNum[f] >= WarnForks) {
+      klee_message("========================================================");
+      klee_message("[WARNING] [State %d] Function: %s() has generated %d new paths.", \
+                   state.number, f->getName().str().c_str(), state.funcPathsNum[f]);
+      klee_message("========================================================");
+  }
+  //---
+
   if (MaxForks!=~0u && stats::forks >= MaxForks) {
     unsigned next = theRNG.getInt32() % N;
     for (unsigned i=0; i<N; ++i) {
@@ -953,6 +974,21 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
 
     return StatePair(0, &current);
   } else {
+      //--xyj: paths in state.pc's function increased 1; Then we check is this Function generates too much paths!
+      Function *f = current.pc->inst->getParent()->getParent();
+      if (current.funcPathsNum.find(f) == current.funcPathsNum.end()) {
+          current.funcPathsNum[f] = 2;//equals init to 1, and then add 1
+      }
+      else {
+          current.funcPathsNum[f] += 1;
+      }
+      if (current.funcPathsNum[f] >= WarnForks) {
+          klee_message("========================================================");
+          klee_message("[WARNING] [State %d] Function: %s() has generated %d new paths.", \
+                       current.number, f->getName().str().c_str(), current.funcPathsNum[f]);
+          klee_message("========================================================");
+      }
+      //---
     TimerStatIncrementer timer(stats::forkTime);
     ExecutionState *falseState, *trueState = &current;
 
