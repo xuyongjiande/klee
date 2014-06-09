@@ -3369,19 +3369,21 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                 "memory error: object read only",
                                 "readonly.err");
         } else {
-			uint64_t addr = static_cast<ConstantExpr *>(address.get())->getZExtValue();
-			if(!state.isMmioDma(addr)){
+			//uint64_t addr = static_cast<ConstantExpr *>(address.get())->getZExtValue();
+			//if(!state.isMmioDma(addr)){
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           wos->write(offset, value);
-			}
+			//}
         }          
       } else {
         ref<Expr> result = os->read(offset, type);
 
 		//xyj DMA read
-		uint64_t addr = static_cast<ConstantExpr *>(address.get())->getZExtValue();
-		if (state.isMmioDma(addr))
-			result = symbolicDmaRead(state, result);
+		/*
+		 *uint64_t addr = dyn_cast<ConstantExpr>(address.get())->getZExtValue();
+		 *if (addr && state.isMmioDma(addr))
+		 *    result = symbolicDmaRead(state, result);
+		 */
         
         if (interpreterOpts.MakeConcreteSymbolic)
           result = replaceReadWithSymbolic(state, result);
