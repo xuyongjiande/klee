@@ -32,6 +32,8 @@
 // fwl add
 #include <iostream>
 #include <iomanip>
+//@xyj add
+#include <llvm/Analysis/DebugInfo.h>
 
 using namespace llvm;
 using namespace klee;
@@ -751,11 +753,12 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 	ref<Expr> op1 = arguments[0];
 	ref<Expr> op2 = arguments[1];
 	if (isa<ConstantExpr>(op1) && isa<ConstantExpr>(op2))
-		return;
+		;//return;
 	bool isTure;
-	unsigned opsize = op1->getWidth();
+	//unsigned opsize = op1->getWidth();
 	ref<Expr> cond; 
-	int flag = (static_cast<ConstantExpr *>(arguments[2].get()))->getZExtValue();
+	unsigned opsize = (static_cast<ConstantExpr *>(arguments[2].get()))->getZExtValue();
+	int flag = (static_cast<ConstantExpr *>(arguments[3].get()))->getZExtValue();
 	ref<Expr> zero = ConstantExpr::create(0, opsize);
 	const char* inttypes[] = {"UADD", "SADD", "USUB", "SSUB", "UMUL", "SMUL", "UDIV", "SDIV", "SHL", "LSHR", "ASHR", "ARRAY", "SIZE"};
 	switch(flag) {
@@ -765,7 +768,8 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 		case 1: //sadd
 			cond = SltExpr::create(AndExpr::create(XorExpr::create(AddExpr::create(op1, op2), op1), XorExpr::create(AddExpr::create(op1, op2), op2)), zero);
 			break;
-		case 2: //usub cond = UltExpr::create(op1, op2);
+		case 2: //usub 
+			cond = UltExpr::create(op1, op2);
 			break;
 		case 3: //ssub
 			cond = SltExpr::create(AndExpr::create(XorExpr::create(SubExpr::create(op1, op2), op1), XorExpr::create(op1, op2)), zero);
@@ -814,7 +818,20 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 		std::vector< std::pair<std::string, std::vector<unsigned char> > > inputs;
 		std::vector< std::pair<std::string, std::vector<unsigned char> > >::iterator it;
 		executor.getSymbolicSolution(state, inputs);
-		std::cout << "=====\nInteger overflow type: " << inttypes[flag] << "\n=====\n";
+		std::cout << "============================================\n";
+		std::cout << "[BUG] Integer overflow: " << inttypes[flag] << "\n";
+		llvm::Instruction *inst = target->inst;
+		if (MDNode *md = inst->getMetadata("dbg") ) {
+			DILocation Loc(md);
+			unsigned line = Loc.getLineNumber();
+			StringRef file = Loc.getFilename();
+			StringRef dir = Loc.getDirectory();
+			std::cout << "      Location: " << dir.str() << file.str() << " : " << std::dec<< line << "\n";
+		}
+		else {
+			std::cout << "      Location: Not found?";
+		}
+		std::cout << "============================================\n";
 		for (it = inputs.begin(); it != inputs.end(); it++) {
 			std::pair<std::string, std::vector<unsigned char> > &vp = *it;
 			std::cout << "-----\n" << vp.first << std::endl << "-----\n";

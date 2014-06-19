@@ -353,6 +353,7 @@ Executor::Executor(const InterpreterOptions &opts,
   externalFuncName.insert("puts");
   externalFuncName.insert("printf");
   externalFuncName.insert("fprintf");
+  externalFuncName.insert("dde");
   //---
 }
 
@@ -442,9 +443,11 @@ Executor::~Executor() {
    int calledFuncNum = 0;//calledFunctions.size();
    int allFuncNum = 0;//kmodule->module->getFunctionList().size();
    llvm::errs() << "Functions being covered:\n";
+   std::set<std::string> calledName;
    for (std::set<Function*>::iterator it = calledFunctions.begin(); it != calledFunctions.end(); it++) {
        if (isCaredFunc_DDE(*it)) {
            llvm::errs() <<  "\t" << (*it)->getName() << "\n";
+		   calledName.insert((*it)->getName().str());
            calledFuncNum ++;
        }
    }
@@ -452,6 +455,8 @@ Executor::~Executor() {
    for (Module::iterator it = kmodule->module->begin(); it != kmodule->module->end(); it++) {
        if (isCaredFunc_DDE(it)) {
            llvm::errs() << "\t" << it->getName() << "\n";
+		   if (calledName.find(it->getName().str()) == calledName.end())
+			   llvm::errs() << "\t" << it->getName() << " [Not used!] " << "\n";
            allFuncNum ++;
        }
    }
@@ -745,7 +750,7 @@ void Executor::branch(ExecutionState &state,
           unsigned line = Loc.getLineNumber();
           StringRef file = Loc.getFilename();
           StringRef dir = Loc.getDirectory();
-          llvm::errs() << "===>>> FILE: " << dir << file << " LINE: " << line << "\n";
+          llvm::errs() << "===>>> FILE: " << dir << "/" << file << " LINE: " << line << "\n";
       }
       klee_message("========================================================");
   }
@@ -1000,7 +1005,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
               unsigned line = Loc.getLineNumber();
               StringRef file = Loc.getFilename();
               StringRef dir = Loc.getDirectory();
-              llvm::errs() << "===>>> FILE: " << dir << file << " LINE: " << line << "\n";
+              llvm::errs() << "===>>> FILE: " << dir << "/" << file << " LINE: " << line << "\n";
           }
           klee_message("========================================================");
       }
@@ -1351,7 +1356,7 @@ void Executor::executeCall(ExecutionState &state,
       }
   }
   //会输出非常多的信息，可用来看函数详细调用的情况
-  //klee_message("[State %5d] call %s()", state.number, f->getName().str().c_str());
+  klee_message("[State %5d] %s() ---> %s()", state.number, fromFuncName.c_str(),  f->getName().str().c_str());
   //---
   Instruction *i = ki->inst;
   if (f && f->isDeclaration()) {
