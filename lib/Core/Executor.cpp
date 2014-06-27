@@ -267,6 +267,16 @@ namespace {
   WarnForks("warn-forks",
             cl::desc("default=8, means if a function generates too much forks(>=8), you will get a warning on term."),
             cl::init(8));
+
+  cl::opt<bool>
+  PrintPath("print-path",
+            cl::desc("default=false, print realtime call path"),
+            cl::init(false));
+
+  cl::opt<bool>
+  PrintPathAtEnd("print-path-at-end",
+            cl::desc("default=false, print call path when a state terminated."),
+            cl::init(false));
 }
 
 
@@ -1356,7 +1366,9 @@ void Executor::executeCall(ExecutionState &state,
       }
   }
   //会输出非常多的信息，可用来看函数详细调用的情况
-  klee_message("[State %5d] %s() ---> %s()", state.number, fromFuncName.c_str(),  f->getName().str().c_str());
+  if (PrintPath) {
+    klee_message("[State %5d] %s() ---> %s()", state.number, fromFuncName.c_str(),  f->getName().str().c_str());
+  }
   //---
   Instruction *i = ki->inst;
   if (f && f->isDeclaration()) {
@@ -2858,10 +2870,12 @@ std::string Executor::getAddressInfo(ExecutionState &state,
 }
 
 void Executor::terminateState(ExecutionState &state) {
-  klee_message("[TerminateState] %5d", state.number);
   //---xyj 输出这条路径的函数调用序列
-  for (ExecutionState::xyjPathType::iterator it = state.path.begin(); it != state.path.end(); it++) {
-      klee_message(" -- [State %d] call %4d  times, %s() -> %s()",state.number, (*it).second, (*it).first.first->getName().str().c_str(), (*it).first.second->getName().str().c_str());//xyj
+  if (PrintPathAtEnd) {
+    klee_message("[TerminateState] %5d", state.number);
+    for (ExecutionState::xyjPathType::iterator it = state.path.begin(); it != state.path.end(); it++) {
+        klee_message(" -- [State %d] call %4d  times, %s() -> %s()",state.number, (*it).second, (*it).first.first->getName().str().c_str(), (*it).first.second->getName().str().c_str());//xyj
+    }
   }
   //---
   if (replayOut && replayPosition!=replayOut->numObjects) {
