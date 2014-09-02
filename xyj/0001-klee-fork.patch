@@ -1,0 +1,143 @@
+From c6f9738dd66e54b8089401b609cc26c892d82715 Mon Sep 17 00:00:00 2001
+From: Yongjian Xu <xuyongjiande@gmail.com>
+Date: Thu, 5 Jun 2014 22:13:27 +0800
+Subject: [PATCH 1/1] =?UTF-8?q?=E6=89=A9=E5=B1=95klee=E8=BE=93=E5=87=BA?=
+ =?UTF-8?q?=EF=BC=8Cfork=E7=9A=84=E4=BF=A1=E6=81=AF=E8=BE=93=E5=87=BA?=
+ =?UTF-8?q?=EF=BC=8C=E4=BB=A5=E5=8F=8A=E6=AF=8F=E6=9D=A1=E8=B7=AF=E5=BE=84?=
+ =?UTF-8?q?=E7=9A=84=E5=87=BD=E6=95=B0=E8=B0=83=E7=94=A8=E6=B5=81=E7=A8=8B?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ include/klee/ExecutionState.h |  3 +++
+ lib/Core/ExecutionState.cpp   |  4 ++++
+ lib/Core/Executor.cpp         | 34 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 41 insertions(+)
+
+diff --git a/include/klee/ExecutionState.h b/include/klee/ExecutionState.h
+index a093815..7aa8ff6 100644
+--- a/include/klee/ExecutionState.h
++++ b/include/klee/ExecutionState.h
+@@ -10,6 +10,7 @@
+ #ifndef KLEE_EXECUTIONSTATE_H
+ #define KLEE_EXECUTIONSTATE_H
+ 
++#include "llvm/Function.h"
+ #include "klee/Constraints.h"
+ #include "klee/Expr.h"
+ #include "klee/Internal/ADT/TreeStream.h"
+@@ -66,6 +67,8 @@ typedef uint64_t u64;
+ 
+ class ExecutionState {
+ public:
++  int number;//state的一个编号，从0开始
++  std::vector< std::pair<llvm::Function*, int> > path;
+   typedef std::vector<StackFrame> stack_ty;
+ 
+ private:
+diff --git a/lib/Core/ExecutionState.cpp b/lib/Core/ExecutionState.cpp
+index 2f5286c..fefcab1 100644
+--- a/lib/Core/ExecutionState.cpp
++++ b/lib/Core/ExecutionState.cpp
+@@ -69,6 +69,7 @@ StackFrame::~StackFrame() {
+ 
+ ExecutionState::ExecutionState(KFunction *kf) 
+   : fakeState(false),
++    number(0),
+     underConstrained(false),
+     depth(0),
+     pc(kf->instructions),
+@@ -88,6 +89,7 @@ ExecutionState::ExecutionState(KFunction *kf)
+ 
+ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions) 
+   : fakeState(true),
++    number(0),
+     underConstrained(false),
+     constraints(assumptions),
+     queryCost(0.),
+@@ -112,6 +114,8 @@ ExecutionState::~ExecutionState() {
+ 
+ ExecutionState::ExecutionState(const ExecutionState& state)
+   : fnAliases(state.fnAliases),
++    number(state.number),
++    path(state.path),
+     fakeState(state.fakeState),
+     underConstrained(state.underConstrained),
+     depth(state.depth),
+diff --git a/lib/Core/Executor.cpp b/lib/Core/Executor.cpp
+index 15737ba..7a62190 100644
+--- a/lib/Core/Executor.cpp
++++ b/lib/Core/Executor.cpp
+@@ -127,6 +127,7 @@ using namespace metaSMT::solver;
+ #endif /* SUPPORT_METASMT */
+ 
+ 
++static int forks = 0;//xyj
+ 
+ namespace {
+   cl::opt<bool>
+@@ -659,6 +660,8 @@ void Executor::branch(ExecutionState &state,
+       ExecutionState *es = result[theRNG.getInt32() % i];
+       ExecutionState *ns = es->branch();
+       addedStates.insert(ns);
++      ns->number = ++forks;
++      klee_message("[State %d Fork: %d]\n", state.number, ns->number);
+       result.push_back(ns);
+       es->ptreeNode->data = 0;
+       std::pair<PTree::Node*,PTree::Node*> res = 
+@@ -877,6 +880,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
+ 
+     falseState = trueState->branch();
+     addedStates.insert(falseState);
++    falseState->number = ++forks;
++    klee_message("[State %d Fork: %d]\n", trueState->number, falseState->number);
+ 
+     if (RandomizeFork && theRNG.getBool())
+       std::swap(trueState, falseState);
+@@ -1186,6 +1191,31 @@ void Executor::executeCall(ExecutionState &state,
+                            KInstruction *ki,
+                            Function *f,
+                            std::vector< ref<Expr> > &arguments) {
++  //---xyj
++  std::string funcName = f->getName().str();
++  if (funcName.find("klee") == std::string::npos \
++          && funcName.find("alloc") == std::string::npos \
++          && funcName.find("free") == std::string::npos \
++          && funcName.find("memset") == std::string::npos \
++          && funcName.find("memcpy") == std::string::npos) {
++      if (state.path.empty()) {
++        state.path.push_back(std::make_pair(f, 1));
++      }
++      else {
++        Function *lastFunc = state.path.back().first;
++        if (lastFunc == f) {
++            int newNum = state.path.back().second ++;
++            //state.path.pop_back();
++            //state.path.push_back(std::make_pair(f, newNum));
++        }
++        else {
++            state.path.push_back(std::make_pair(f, 1));
++        }
++      }
++  }
++  //会输出非常多的信息，可用来看函数详细调用的情况
++  //klee_message("[State: %5d] call %s", state.number, f->getName().str().c_str());
++  //---
+   Instruction *i = ki->inst;
+   if (f && f->isDeclaration()) {
+     switch(f->getIntrinsicID()) {
+@@ -2686,6 +2716,10 @@ std::string Executor::getAddressInfo(ExecutionState &state,
+ }
+ 
+ void Executor::terminateState(ExecutionState &state) {
++  klee_message("[TerminateState] %d", state.number);
++  for (std::vector<std::pair<Function*, int> >::iterator it = state.path.begin(); it != state.path.end(); it++) {
++      klee_message("\t[State %d] call %d \ttimes %s",state.number, (*it).second  , (*it).first->getName().str().c_str());//xyj
++  }
+   if (replayOut && replayPosition!=replayOut->numObjects) {
+     klee_warning_once(replayOut, 
+                       "replay did not consume all objects in test input.");
+-- 
+1.9.1
+

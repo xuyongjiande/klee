@@ -1,0 +1,167 @@
+From c0b13440c961bd09caca46ca017d275544b7e947 Mon Sep 17 00:00:00 2001
+From: Yongjian Xu <xuyongjiande@gmail.com>
+Date: Sat, 7 Jun 2014 16:06:23 +0800
+Subject: [PATCH] =?UTF-8?q?=E9=80=80=E5=87=BA=E7=9A=84=E6=97=B6=E5=80=99?=
+ =?UTF-8?q?=E7=BB=9F=E8=AE=A1=E5=B9=B6=E6=89=93=E5=8D=B0=E5=87=BD=E6=95=B0?=
+ =?UTF-8?q?=E8=A6=86=E7=9B=96=E7=8E=87?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ lib/Core/Executor.cpp | 87 ++++++++++++++++++++++++++++++++++++++++++++++++++-
+ lib/Core/Executor.h   |  7 +++++
+ 2 files changed, 93 insertions(+), 1 deletion(-)
+
+diff --git a/lib/Core/Executor.cpp b/lib/Core/Executor.cpp
+index bc87190..33eacdb 100644
+--- a/lib/Core/Executor.cpp
++++ b/lib/Core/Executor.cpp
+@@ -83,7 +83,9 @@
+ #include "llvm/Support/CommandLine.h"
+ #include "llvm/Support/raw_ostream.h"
+ #include "llvm/Support/Process.h"
+-
++//---xyj
++#include <llvm/Analysis/DebugInfo.h>
++//---
+ #include <cassert>
+ #include <algorithm>
+ #include <iostream>
+@@ -337,6 +339,16 @@ Executor::Executor(const InterpreterOptions &opts,
+   this->solver = new TimingSolver(solver);
+ 
+   memory = new MemoryManager();
++  //---xyj init externalFuncName set<string>
++  externalFuncName.insert("memset");
++  externalFuncName.insert("memcpy");
++  externalFuncName.insert("mempcpy");
++  externalFuncName.insert("malloc");
++  externalFuncName.insert("free");
++  externalFuncName.insert("puts");
++  externalFuncName.insert("printf");
++  externalFuncName.insert("fprintf");
++  //---
+ }
+ 
+ 
+@@ -371,7 +383,75 @@ const Module *Executor::setModule(llvm::Module *module,
+   return module;
+ }
+ 
++bool Executor::isCaredFunc_DDE(Function * f) {
++    //Do not care built-in functions in LLVM & KLEE
++    if (f->getName().find("llvm") != std::string::npos || f->getName().find("klee") != std::string::npos)
++        return false;
++
++    //Do not care main()
++    if (f->getName() == "main")
++        return false;
++
++    //Do not care externalFunctions like puts(), printf()
++    for (std::set<std::string>::iterator it = externalFuncName.begin(); it != externalFuncName.end(); it++) {
++        if (f->getName().find(*it) != std::string::npos)
++            return false;
++    }
++
++    //Do not care empty funtions
++    if (f->empty()) {
++        //llvm::errs() << "\tFind no BB in this Function: " << f->getName() << "()" << "\n";
++        return false;
++    }
++
++    //Do not care functions in DDE
++    //get FileName from one inst of this Func.
++    BasicBlock *bb = &f->front();
++    if (bb && !bb->empty()) {
++        Instruction *inst = &bb->back();
++        if (inst)
++        {
++            if (MDNode *md = inst->getMetadata("dbg") ) {
++                DILocation Loc(md);
++                unsigned line = Loc.getLineNumber();
++                StringRef file = Loc.getFilename();
++                StringRef dir = Loc.getDirectory();
++                //In DDE, not Driver. So we do not care it.
++                if (file.find("dummy") != std::string::npos) {
++                    //llvm::errs() << "\tThis Function is in DDE: " << f->getName() << "()" << " FileName: " << file << "\n";
++                    return false;
++                }
++            }
++        }
++        else {// no metadata
++            //llvm::errs() << "Inst has no metadata; Function: " << f->getName() << "\n";
++        }
++    }
++    else {// bb is empty! possible?
++        //llvm::errs() << "BB is empty; Function: " << f->getName() << "\n";
++    }
++    return true;
++}
+ Executor::~Executor() {
++   //---xyj 退出的时候，统计并打印函数覆盖信息
++   int calledFuncNum = 0;//calledFunctions.size();
++   int allFuncNum = 0;//kmodule->module->getFunctionList().size();
++   llvm::errs() << "Functions being covered:\n";
++   for (std::set<Function*>::iterator it = calledFunctions.begin(); it != calledFunctions.end(); it++) {
++       if (isCaredFunc_DDE(*it)) {
++           llvm::errs() <<  "\t" << (*it)->getName() << "\n";
++           calledFuncNum ++;
++       }
++   }
++   llvm::errs() << "All Functions:\n";
++   for (Module::iterator it = kmodule->module->begin(); it != kmodule->module->end(); it++) {
++       if (isCaredFunc_DDE(it)) {
++           llvm::errs() << "\t" << it->getName() << "\n";
++           allFuncNum ++;
++       }
++   }
++   klee_message("[Statistic] ( calledFuncNum: %d / allFuncNum: %d ) = [ %2.2f% ]", calledFuncNum, allFuncNum, (float)calledFuncNum/allFuncNum*100);
++   //---
+   delete memory;
+   delete externalDispatcher;
+   if (processTree)
+@@ -1191,6 +1271,9 @@ void Executor::executeCall(ExecutionState &state,
+                            KInstruction *ki,
+                            Function *f,
+                            std::vector< ref<Expr> > &arguments) {
++  //---xyj 用于统计函数覆盖率
++  calledFunctions.insert(f);
++  //---
+   //---xyj
+   Function *fromFunc = ki->inst->getParent()->getParent();
+   std::string fromFuncName = fromFunc->getName().str();
+@@ -2719,9 +2802,11 @@ std::string Executor::getAddressInfo(ExecutionState &state,
+ 
+ void Executor::terminateState(ExecutionState &state) {
+   klee_message("[TerminateState] %5d", state.number);
++  //---xyj 输出这条路径的函数调用序列
+   for (ExecutionState::xyjPathType::iterator it = state.path.begin(); it != state.path.end(); it++) {
+       klee_message(" -- [State %d] call %4d  times, %s() -> %s()",state.number, (*it).second, (*it).first.first->getName().str().c_str(), (*it).first.second->getName().str().c_str());//xyj
+   }
++  //---
+   if (replayOut && replayPosition!=replayOut->numObjects) {
+     klee_warning_once(replayOut, 
+                       "replay did not consume all objects in test input.");
+diff --git a/lib/Core/Executor.h b/lib/Core/Executor.h
+index 386db27..720f33a 100644
+--- a/lib/Core/Executor.h
++++ b/lib/Core/Executor.h
+@@ -97,7 +97,14 @@ public:
+ 
+   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
+ 
++public://xyj
++  bool isCaredFunc_DDE(llvm::Function * f);
++
+ private:
++  //---xyj 记录被调用的函数，用于统计函数覆盖率
++  std::set<llvm::Function *> calledFunctions;
++  std::set<std::string> externalFuncName;
++  //---
+   class TimerInfo;
+ 
+   KModule *kmodule;
+-- 
+1.9.1
+
