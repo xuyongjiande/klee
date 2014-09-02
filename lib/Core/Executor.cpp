@@ -464,9 +464,10 @@ Executor::~Executor() {
    llvm::errs() << "All Functions:\n";
    for (Module::iterator it = kmodule->module->begin(); it != kmodule->module->end(); it++) {
        if (isCaredFunc_DDE(it)) {
-           llvm::errs() << "\t" << it->getName() << "\n";
 		   if (calledName.find(it->getName().str()) == calledName.end())
-			   llvm::errs() << "\t" << it->getName() << " [Not used!] " << "\n";
+			   llvm::errs() << "\t" << " [Not used!] " << it->getName() << "\n";
+		   else
+			   llvm::errs() << "\t" << "     [Used!] " << it->getName() << "\n";
            allFuncNum ++;
        }
    }
