@@ -405,8 +405,10 @@ bool Executor::isCaredFunc_DDE(Function * f) {
         return false;
 
     //Do not care main()
-    if (f->getName() == "main")
-        return false;
+    /*
+     *if (f->getName() == "main")
+     *    return false;
+     */
 
     //Do not care externalFunctions like puts(), printf()
     for (std::set<std::string>::iterator it = externalFuncName.begin(); it != externalFuncName.end(); it++) {
@@ -449,30 +451,36 @@ bool Executor::isCaredFunc_DDE(Function * f) {
     return true;
 }
 Executor::~Executor() {
-   //---xyj 退出的时候，统计并打印函数覆盖信息
-   int calledFuncNum = 0;//calledFunctions.size();
-   int allFuncNum = 0;//kmodule->module->getFunctionList().size();
-   llvm::errs() << "Functions being covered:\n";
-   std::set<std::string> calledName;
-   for (std::set<Function*>::iterator it = calledFunctions.begin(); it != calledFunctions.end(); it++) {
-       if (isCaredFunc_DDE(*it)) {
-           llvm::errs() <<  "\t" << (*it)->getName() << "\n";
-		   calledName.insert((*it)->getName().str());
-           calledFuncNum ++;
-       }
-   }
-   llvm::errs() << "All Functions:\n";
-   for (Module::iterator it = kmodule->module->begin(); it != kmodule->module->end(); it++) {
-       if (isCaredFunc_DDE(it)) {
-		   if (calledName.find(it->getName().str()) == calledName.end())
-			   llvm::errs() << "\t" << " [Not used!] " << it->getName() << "\n";
-		   else
-			   llvm::errs() << "\t" << "     [Used!] " << it->getName() << "\n";
-           allFuncNum ++;
-       }
-   }
-   klee_message("[Statistic] ( calledFuncNum: %d / allFuncNum: %d ) = [ %2.2f% ]", calledFuncNum, allFuncNum, (float)calledFuncNum/allFuncNum*100);
-   //---
+	//---xyj 退出的时候，统计并打印函数覆盖信息
+	int calledFuncNum = 0;//not calledFunctions.size();
+	int allFuncNum = 0;//not kmodule->module->getFunctionList().size();
+	llvm::errs() << "---------------------------\n";
+	llvm::errs() << "Functions being covered:\n";
+	llvm::errs() << "---------------------------\n";
+	std::set<std::string> calledName;
+	for (std::set<Function*>::iterator it = calledFunctions.begin(); it != calledFunctions.end(); it++) {
+		if (isCaredFunc_DDE(*it)) {
+			llvm::errs() <<  "\t" << (*it)->getName() << "\n";
+			calledName.insert((*it)->getName().str());
+			calledFuncNum ++;
+		}
+	}
+	llvm::errs() << "\n";
+	llvm::errs() << "---------------------------\n";
+	llvm::errs() << "Functions **NOT** covered:\n";
+	llvm::errs() << "---------------------------\n";
+	for (Module::iterator it = kmodule->module->begin(); it != kmodule->module->end(); it++) {
+		if (isCaredFunc_DDE(it)) {
+			if (calledName.find(it->getName().str()) == calledName.end())
+				llvm::errs() << "\t" << it->getName() << "\n";
+			allFuncNum ++;
+		}
+	}
+	llvm::errs() << "\n";
+	llvm::errs() << "--------------------------------------------------------\n";
+	klee_message("[Statistic] ( calledFuncNum: %d / allFuncNum: %d ) = [ %2.2f% ]", calledFuncNum, allFuncNum, (float)calledFuncNum/allFuncNum*100);
+	llvm::errs() << "--------------------------------------------------------\n";
+	//---
   delete memory;
   delete externalDispatcher;
   if (processTree)
@@ -3554,6 +3562,7 @@ void Executor::runFunctionAsMain(Function *f,
 				 int argc,
 				 char **argv,
 				 char **envp) {
+	calledFunctions.insert(f);
   std::vector<ref<Expr> > arguments;
 
   // force deterministic initialization of memory objects
