@@ -211,6 +211,11 @@ namespace {
   Watchdog("watchdog",
            cl::desc("Use a watchdog process to enforce --max-time."),
            cl::init(0));
+
+	cl::opt<std::string>
+	TargetFunction("target-function",
+		cl::desc("start run from this function"),
+		cl::init("main"));
 }
 
 extern cl::opt<double> MaxTime;
@@ -956,7 +961,7 @@ void stop_forking() {
   theInterpreter->setInhibitForking(true);
 }
 
-static void interrupt_handle() {
+static void interrupt_handle() {//第一次CTRL+C进行收尾工作，再ctrl+c就直接退出
   if (!interrupted && theInterpreter) {
     std::cerr << "KLEE: ctrl-c detected, requesting interpreter to halt.\n";
     halt_execution();
@@ -1295,8 +1300,17 @@ int main(int argc, char **argv, char **envp) {
   // Get the desired main function.  klee_main initializes uClibc
   // locale and other data and then calls main.
   Function *mainFn = mainModule->getFunction("main");
+  /* xyj
+   * To execute every function(named TargetFunction)
+   * We change mainFn to TargetFunction
+   * But, there are still many problems to dill with.
+   * For example, the targetFunction needs to access resources not given yet!
+   * Sometimes, We can give it symbolic Value. But it's not a excellent solution.
+   */
+  mainFn = mainModule->getFunction(TargetFunction);
+  klee_message("NOTE: Trade %s as main Function", TargetFunction.c_str());
   if (!mainFn) {
-    std::cerr << "'main' function not found in module.\n";
+    std::cerr << "'" << TargetFunction << "' function not found in module.\n";
     return -1;
   }
 
