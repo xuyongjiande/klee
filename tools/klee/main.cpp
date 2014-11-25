@@ -1308,10 +1308,12 @@ int main(int argc, char **argv, char **envp) {
    * Sometimes, We can give it symbolic Value. But it's not a excellent solution.
    */
   mainFn = mainModule->getFunction(TargetFunction);
-  klee_message("NOTE: Trade %s as main Function", TargetFunction.c_str());
   if (!mainFn) {
     std::cerr << "'" << TargetFunction << "' function not found in module.\n";
     return -1;
+  }
+  if (TargetFunction != "main") {
+    klee_message("NOTE: Trade %s as main Function", TargetFunction.c_str());
   }
 
   // FIXME: Change me to std types.

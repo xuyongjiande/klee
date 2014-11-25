@@ -85,6 +85,7 @@
 #include "llvm/Support/Process.h"
 //---xyj
 #include <llvm/Analysis/DebugInfo.h>
+#include "llvm/Function.h"
 //---
 #include <cassert>
 #include <algorithm>
@@ -3639,6 +3640,73 @@ void Executor::runFunctionAsMain(Function *f,
     }
   }
   
+	/* xyj
+	* This change is for target-function
+	* we alloc it's arguments and then bind them to the function.
+	* Thus, the function can run just like main()
+	*/
+	std::vector<ref<Expr> > tf_arguments;//targetFunction
+	for (llvm::Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end(); arg++) {
+		const llvm::Type *type = arg->getType();
+		llvm::Type::TypeID tid = type->getTypeID();
+
+		std::string name = arg->getNameStr();
+		std::string typeDesc = type->getDescription();
+		klee_xyj("name: %s", name.c_str());
+		klee_xyj("typeDescription: %s", typeDesc.c_str());
+
+		//根据不同的情况，符号化参数int、char等、或者分配空间：指针
+		MemoryObject *mo;
+		ObjectState *os;
+		switch(tid) {
+		case llvm::Type::IntegerTyID:
+			//symbolic expr
+			mo = memory->allocate(8*8, false, true, f->begin()->begin());
+			os = bindObjectInState(*state, mo, false);
+			if (type->isIntegerTy(32)) {
+				tf_arguments.push_back(ConstantExpr::alloc(1, Expr::Int32));
+			}
+			else if (type->isIntegerTy(64)) {
+				tf_arguments.push_back(ConstantExpr::alloc(1, Expr::Int64));
+				/*
+				 *tf_arguments.push_back(os->read(0, 64));
+				 *os->read(0, 64)->dump();
+				 */
+			}
+			else {
+				klee_error("Value's type is integer, but is not 32 or 64 bit.");
+				printf("--- Cut here ---\n");
+				arg->dump();
+				printf("--- End ---\n");
+			}
+			klee_xyj("TypeID: %d", arg->getType()->getTypeID());
+			klee_xyj("rawTypeID: %d", arg->getRawType()->getTypeID());
+			break;
+		case llvm::Type::PointerTyID:
+			mo = memory->allocate(100, false, true, f->begin()->begin());
+			tf_arguments.push_back(Expr::createPointer(mo->address));
+			os = bindObjectInState(*state, mo, false);
+			os->write(1 * NumPtrBytes, mo->getBaseExpr());
+			klee_xyj("TypeID: %d", arg->getType()->getTypeID());
+			klee_xyj("rawTypeID: %d", arg->getRawType()->getTypeID());
+			executeMakeSymbolic(*state, mo, "argument of TargetFunction: pointer => \
+					alloc space and make it's content symbolic");
+			break;
+		case llvm::Type::StructTyID:
+			;
+		case llvm::Type::ArrayTyID:
+			;
+		case llvm::Type::VectorTyID:
+			;
+		default:
+			klee_warning("type: %d not considered.\n", tid);
+		}
+	}
+	for (unsigned i = 0, e = tf_arguments.size(); i != e; ++i) {
+		klee_xyj("bind argument: %d", i);
+		bindArgument(kf, i, *state, tf_arguments[i]);
+	}
+
   initializeGlobals(*state);
 
   processTree = new PTree(state);
