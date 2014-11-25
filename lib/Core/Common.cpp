@@ -85,6 +85,12 @@ void klee::klee_warning(const char *msg, ...) {
   va_end(ap);
 }
 
+void klee::klee_xyj(const char *msg, ...) {
+  va_list ap;
+  va_start(ap, msg);
+  klee_vmessage("| DEBUG |", false, msg, ap);
+  va_end(ap);
+}
 
 /* Prints a warning once per message. */
 void klee::klee_warning_once(const void *id, const char *msg, ...) {
