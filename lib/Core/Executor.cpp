@@ -278,6 +278,11 @@ namespace {
   PrintPathAtEnd("print-path-at-end",
             cl::desc("default=false, print call path when a state terminated."),
             cl::init(false));
+
+  cl::opt<bool>
+  PrintFunctionCoverage("print-function-coverage",
+            cl::desc("default=false print function coverage when klee exit."),
+            cl::init(false));
 }
 
 
@@ -432,9 +437,9 @@ bool Executor::isCaredFunc_DDE(Function * f) {
         {
             if (MDNode *md = inst->getMetadata("dbg") ) {
                 DILocation Loc(md);
-                unsigned line = Loc.getLineNumber();
+                //unsigned line = Loc.getLineNumber();
                 StringRef file = Loc.getFilename();
-                StringRef dir = Loc.getDirectory();
+                //StringRef dir = Loc.getDirectory();
                 //In DDE, not Driver. So we do not care it.
                 if (file.find("dummy") != std::string::npos) {
                     //llvm::errs() << "\tThis Function is in DDE: " << f->getName() << "()" << " FileName: " << file << "\n";
@@ -455,10 +460,12 @@ Executor::~Executor() {
 	//---xyj 退出的时候，统计并打印函数覆盖信息
 	int calledFuncNum = 0;//not calledFunctions.size();
 	int allFuncNum = 0;//not kmodule->module->getFunctionList().size();
+	std::set<std::string> calledName;
+	if (!PrintFunctionCoverage)
+		goto normal;
 	llvm::errs() << "---------------------------\n";
 	llvm::errs() << "Functions being covered:\n";
 	llvm::errs() << "---------------------------\n";
-	std::set<std::string> calledName;
 	for (std::set<Function*>::iterator it = calledFunctions.begin(); it != calledFunctions.end(); it++) {
 		if (isCaredFunc_DDE(*it)) {
 			llvm::errs() <<  "\t" << (*it)->getName() << "\n";
@@ -479,8 +486,9 @@ Executor::~Executor() {
 	}
 	llvm::errs() << "\n";
 	llvm::errs() << "--------------------------------------------------------\n";
-	klee_message("[Statistic] ( calledFuncNum: %d / allFuncNum: %d ) = [ %2.2f% ]", calledFuncNum, allFuncNum, (float)calledFuncNum/allFuncNum*100);
+	klee_message("[Statistic] ( calledFuncNum: %d / allFuncNum: %d ) = [ %2.2f%% ]", calledFuncNum, allFuncNum, (float)calledFuncNum/allFuncNum*100);
 	llvm::errs() << "--------------------------------------------------------\n";
+normal:
 	//---
   delete memory;
   delete externalDispatcher;
