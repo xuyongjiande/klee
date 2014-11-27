@@ -1477,7 +1477,8 @@ int main(int argc, char **argv, char **envp) {
         klee_error("Unable to change directory to: %s", RunInDir.c_str());
       }
     }
-    interpreter->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
+    //interpreter->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
+    interpreter->runTargetFunctionAsMain(mainFn);
 
     while (!seeds.empty()) {
       kTest_free(seeds.back());

@@ -439,6 +439,8 @@ public:
     usingSeeds = seeds;
   }
 
+  virtual void runTargetFunctionAsMain(llvm::Function *f);
+
   virtual void runFunctionAsMain(llvm::Function *f,
                                  int argc,
                                  char **argv,

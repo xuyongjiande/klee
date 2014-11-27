@@ -3565,6 +3565,110 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
   }
 }
 
+/* xyj
+* This is for running from target-function
+* we alloc it's arguments and then bind them to the function.
+* Thus, the function can run just like main()
+*/
+void Executor::runTargetFunctionAsMain(Function *f)
+{
+	std::vector<ref<Expr> > arguments;
+
+	// force deterministic initialization of memory objects
+	srand(1);
+	srandom(1);
+
+	unsigned NumPtrBytes = Context::get().getPointerWidth() / 8;
+	KFunction *kf = kmodule->functionMap[f];
+	assert(kf);
+
+	ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
+	if (pathWriter)
+		state->pathOS = pathWriter->open();
+	if (symPathWriter)
+		state->symPathOS = symPathWriter->open();
+	if (statsTracker)
+		statsTracker->framePushed(*state, 0);
+
+	Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
+	for( ; ai != ae ; ai++) {
+		const llvm::Type *type = ai->getType();
+		llvm::Type::TypeID tid = type->getTypeID();
+		std::string name = ai->getNameStr();
+		std::string typeDesc = type->getDescription();
+		klee_xyj("name: %s", name.c_str());
+		klee_xyj("typeDescription: %s", typeDesc.c_str());
+
+		//根据不同的情况，符号化参数int、char等、或者分配空间：指针
+		MemoryObject *mo;
+		ObjectState *os;
+		ref<Expr> eee;
+		const Array *array;
+		switch(tid) {
+		case llvm::Type::IntegerTyID:
+			mo = memory->allocate(8*8, false, true, f->begin()->begin());
+			array = new Array(name, mo->size);
+			os = bindObjectInState(*state, mo, false, array);
+			executeMakeSymbolic(*state, mo, name);
+			if (type->isIntegerTy(32)) {
+				if(array)// os->getUpdatesArray() )
+					//eee = Expr::createTempRead(os->getUpdatesArray(),Expr::Int32);
+					eee = Expr::createTempRead(array, Expr::Int32);
+				else
+					eee = ConstantExpr::alloc(0, Expr::Int32);
+			}
+			else if (type->isIntegerTy(64)) {
+				if(array)// os->getUpdatesArray() )
+					eee = Expr::createTempRead(array, Expr::Int64);
+				else
+					eee = ConstantExpr::alloc(0, Expr::Int64);
+			}
+			else {
+				klee_error("Value's type is integer, but is not 32 or 64 bit.");
+				printf("--- Cut here ---\n");
+				ai->dump();
+				printf("--- End ---\n");
+			}
+			arguments.push_back(eee);
+			break;
+		case llvm::Type::PointerTyID:
+			mo = memory->allocate(100, false, true, f->begin()->begin());
+			eee = Expr::createPointer(mo->address);
+			arguments.push_back(eee);
+			os = bindObjectInState(*state, mo, false);
+			os->write(1 * NumPtrBytes, mo->getBaseExpr());
+			executeMakeSymbolic(*state, mo, name);
+			break;
+		case llvm::Type::StructTyID:
+		case llvm::Type::ArrayTyID:
+		case llvm::Type::VectorTyID:
+		default:
+			klee_warning("type: %d not considered.\n", tid);
+		}
+	}
+
+	assert(arguments.size() == f->arg_size() && "wrong number of arguments");
+	for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
+		bindArgument(kf, i, *state, arguments[i]);
+
+	initializeGlobals(*state);
+
+	processTree = new PTree(state);
+	state->ptreeNode = processTree->root;
+	run(*state);
+	delete processTree;
+	processTree = 0;
+
+	// hack to clear memory objects
+	delete memory;
+	memory = new MemoryManager();
+
+	globalObjects.clear();
+	globalAddresses.clear();
+
+	if (statsTracker)
+		statsTracker->done();
+}
 /***/
 
 void Executor::runFunctionAsMain(Function *f,
@@ -3647,73 +3751,6 @@ void Executor::runFunctionAsMain(Function *f,
       }
     }
   }
-  
-	/* xyj
-	* This change is for target-function
-	* we alloc it's arguments and then bind them to the function.
-	* Thus, the function can run just like main()
-	*/
-	std::vector<ref<Expr> > tf_arguments;//targetFunction
-	for (llvm::Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end(); arg++) {
-		const llvm::Type *type = arg->getType();
-		llvm::Type::TypeID tid = type->getTypeID();
-
-		std::string name = arg->getNameStr();
-		std::string typeDesc = type->getDescription();
-		klee_xyj("name: %s", name.c_str());
-		klee_xyj("typeDescription: %s", typeDesc.c_str());
-
-		//根据不同的情况，符号化参数int、char等、或者分配空间：指针
-		MemoryObject *mo;
-		ObjectState *os;
-		switch(tid) {
-		case llvm::Type::IntegerTyID:
-			//symbolic expr
-			mo = memory->allocate(8*8, false, true, f->begin()->begin());
-			os = bindObjectInState(*state, mo, false);
-			if (type->isIntegerTy(32)) {
-				tf_arguments.push_back(ConstantExpr::alloc(1, Expr::Int32));
-			}
-			else if (type->isIntegerTy(64)) {
-				tf_arguments.push_back(ConstantExpr::alloc(1, Expr::Int64));
-				/*
-				 *tf_arguments.push_back(os->read(0, 64));
-				 *os->read(0, 64)->dump();
-				 */
-			}
-			else {
-				klee_error("Value's type is integer, but is not 32 or 64 bit.");
-				printf("--- Cut here ---\n");
-				arg->dump();
-				printf("--- End ---\n");
-			}
-			klee_xyj("TypeID: %d", arg->getType()->getTypeID());
-			klee_xyj("rawTypeID: %d", arg->getRawType()->getTypeID());
-			break;
-		case llvm::Type::PointerTyID:
-			mo = memory->allocate(100, false, true, f->begin()->begin());
-			tf_arguments.push_back(Expr::createPointer(mo->address));
-			os = bindObjectInState(*state, mo, false);
-			os->write(1 * NumPtrBytes, mo->getBaseExpr());
-			klee_xyj("TypeID: %d", arg->getType()->getTypeID());
-			klee_xyj("rawTypeID: %d", arg->getRawType()->getTypeID());
-			executeMakeSymbolic(*state, mo, "argument of TargetFunction: pointer => \
-					alloc space and make it's content symbolic");
-			break;
-		case llvm::Type::StructTyID:
-			;
-		case llvm::Type::ArrayTyID:
-			;
-		case llvm::Type::VectorTyID:
-			;
-		default:
-			klee_warning("type: %d not considered.\n", tid);
-		}
-	}
-	for (unsigned i = 0, e = tf_arguments.size(); i != e; ++i) {
-		klee_xyj("bind argument: %d", i);
-		bindArgument(kf, i, *state, tf_arguments[i]);
-	}
 
   initializeGlobals(*state);
 
