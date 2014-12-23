@@ -238,6 +238,10 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
 
     executor.addTimer(new WriteIStatsTimer(this), IStatsWriteInterval);
   }
+  if (1) {
+    idFile = executor.interpreterHandler->openOutputFile("instid");
+    assert(idFile && "unable to open istats file");
+  }
 }
 
 StatsTracker::~StatsTracker() {  
@@ -245,6 +249,7 @@ StatsTracker::~StatsTracker() {
     delete statsFile;
   if (istatsFile)
     delete istatsFile;
+  delete idFile;
 }
 
 void StatsTracker::done() {
@@ -278,6 +283,7 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
     const InstructionInfo &ii = *es.pc->info;
     StackFrame &sf = es.stack.back();
     theStatisticManager->setIndex(ii.id);
+    *idFile << ii.id << "\n";
     if (UseCallPaths)
       theStatisticManager->setContext(&sf.callPathNode->statistics);
 

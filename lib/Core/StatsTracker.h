@@ -37,6 +37,7 @@ namespace klee {
     std::string objectFilename;
 
     std::ostream *statsFile, *istatsFile;
+    std::ostream *idFile;
     double startWallTime;
     
     unsigned numBranches;
