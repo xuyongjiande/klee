@@ -3479,6 +3479,22 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
     } else {
+      //xyj
+      /*
+       *MemoryObject *mo;
+       *ObjectState *os;
+       *Array *array;
+       *std::string name = "SKSALLOC";
+       *mo = memory->allocate(bytes, false, true, unbound->pc->inst);
+       *array = new Array(name, bytes);
+       *os = bindObjectInState(*unbound, mo, false, array);
+       *executeMakeSymbolic(*unbound, mo, name);
+       *ref<Expr> result = os->read(0, type);
+       *printf("target->dest: %u\n", target->dest);
+       *KFunction *kf = unbound->stack.back().kf;
+       *printf("total num of cells: %d\n", kf->numRegisters);
+       *bindLocal(target, *unbound, result);
+       */
       terminateStateOnError(*unbound,
                             "memory error: out of bound pointer",
                             "ptr.err",
@@ -3595,9 +3611,9 @@ void Executor::runTargetFunctionAsMain(Function *f)
 		const llvm::Type *type = ai->getType();
 		llvm::Type::TypeID tid = type->getTypeID();
 		std::string name = ai->getNameStr();
-		std::string typeDesc = type->getDescription();
-		klee_xyj("name: %s", name.c_str());
-		klee_xyj("typeDescription: %s", typeDesc.c_str());
+		//std::string typeDesc = type->getDescription();
+		klee_xyj("初始化函数参数！！！参数名： name: %s", name.c_str());
+		//klee_xyj("typeDescription: %s", typeDesc.c_str());
 
 		//根据不同的情况，符号化参数int、char等、或者分配空间：指针
 		MemoryObject *mo;
