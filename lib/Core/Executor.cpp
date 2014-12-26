@@ -726,8 +726,8 @@ void Executor::initializeGlobals(ExecutionState &state) {
 
       if (!i->hasInitializer())
           os->initializeToRandom();
-    }
-  }
+    }//end of 'not Declaration'
+  }//end of for
   
   // link aliases to their definitions (if bound)
   for (Module::alias_iterator i = m->alias_begin(), ie = m->alias_end(); 
@@ -750,6 +750,28 @@ void Executor::initializeGlobals(ExecutionState &state) {
       initializeGlobalObject(state, wos, i->getInitializer(), 0);
       // if(i->isConstant()) os->setReadOnly(true);
     }
+    /*
+     *xyj
+     *I want alloc space and write symbolic value for global pointers.
+     *The problem is we can not get it's size or content.
+     *Should never try to do this.
+     */
+/*
+ *    if (i->getType()->getElementType()->isPointerTy()) {
+ *      const llvm::Type *pointedTy = cast<llvm::PointerType>\
+ *           (i->getType()->getElementType())->getElementType();
+ *
+ *      //now just alloc for int*
+ *      if (pointedTy->getTypeID() != 9)
+ *        continue;
+ *
+ *      i->dump();
+ *      MemoryObject *mo = memory->allocate(4, false, true, &*i);
+ *      ObjectState *os = bindObjectInState(state, mo, false);
+ *      executeMakeSymbolic(state, mo, "sks");
+ *      os->write(0, mo->getBaseExpr());
+ *    }
+ */
   }
 }
 
