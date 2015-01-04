@@ -791,7 +791,8 @@ void Executor::branch(ExecutionState &state,
   else {
       state.funcPathsNum[f] += N-1;
   }
-  if (state.funcPathsNum[f] >= WarnForks) {
+  int forkN = state.funcPathsNum[f];
+  if (forkN % WarnForks == 0 && (forkN/WarnForks & (forkN/WarnForks - 1)) == 0) {
       klee_message("========================================================");
       klee_message("[WARNING] [State %d] Function: %s() has generated %d new paths.", \
                    state.number, f->getName().str().c_str(), state.funcPathsNum[f]);
@@ -825,7 +826,7 @@ void Executor::branch(ExecutionState &state,
       ExecutionState *ns = es->branch();
       addedStates.insert(ns);
       ns->number = ++forks;
-      klee_message("[State %d Fork: %d]\n", state.number, ns->number);
+      //klee_message("[State %d Fork: %d]", state.number, ns->number);
       result.push_back(ns);
       es->ptreeNode->data = 0;
       std::pair<PTree::Node*,PTree::Node*> res = 
@@ -1046,7 +1047,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
       else {
           current.funcPathsNum[f] += 1;
       }
-      if (current.funcPathsNum[f] >= WarnForks) {
+      int forkN = current.funcPathsNum[f];
+      if (forkN % WarnForks == 0 && (forkN/WarnForks & (forkN/WarnForks - 1)) == 0) {
           klee_message("========================================================");
           klee_message("[WARNING] [State %d] Function: %s() has generated %d new paths.", \
                        current.number, f->getName().str().c_str(), current.funcPathsNum[f]);
@@ -1068,7 +1070,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     falseState = trueState->branch();
     addedStates.insert(falseState);
     falseState->number = ++forks;
-    klee_message("[State %d Fork: %d]\n", trueState->number, falseState->number);
+    //klee_message("[State %d Fork: %d]", trueState->number, falseState->number);
 
     if (RandomizeFork && theRNG.getBool())
       std::swap(trueState, falseState);
