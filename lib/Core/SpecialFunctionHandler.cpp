@@ -755,10 +755,10 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 	if (isa<ConstantExpr>(op1) && isa<ConstantExpr>(op2))
 		;//return;
 	bool isTure;
-	//unsigned opsize = op1->getWidth();
 	ref<Expr> cond; 
-	unsigned opsize = (static_cast<ConstantExpr *>(arguments[2].get()))->getZExtValue();
-	int flag = (static_cast<ConstantExpr *>(arguments[3].get()))->getZExtValue();
+	int flag = (static_cast<ConstantExpr *>(arguments[2].get()))->getZExtValue();
+	unsigned opsize = op1->getWidth();
+	//unsigned opsize = (static_cast<ConstantExpr *>(arguments[3].get()))->getZExtValue();
 	ref<Expr> zero = ConstantExpr::create(0, opsize);
 	const char* inttypes[] = {"UADD", "SADD", "USUB", "SSUB", "UMUL", "SMUL", "UDIV", "SDIV", "SHL", "LSHR", "ASHR", "ARRAY", "SIZE"};
 	switch(flag) {
@@ -806,7 +806,8 @@ void SpecialFunctionHandler::detectInt(ExecutionState &state,
 			cond = SltExpr::create(op1, zero);
 			break;
 		default:
-			break;
+			return;
+			//break;
 	}
 	if (!(executor.getSolver()->mayBeTrue(state, cond, isTure))) {
 		std::cout << "Must be false!" << std::endl;
